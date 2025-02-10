@@ -1,0 +1,59 @@
+# Node.js
+node_modules/
+dist/
+.env
+.vscode/
+.idea/
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+logs/
+*.log
+
+# React
+build/
+*.cache/
+*.tmp/
+
+# Tailwind CSS
+*.css.map
+
+# FastAPI
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+*.log
+.env
+*.pid
+*.pyc
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+.Python
+.mypy_cache/
+.pytest_cache/
+venv/
+pip-log.txt
+
+# Docker
+docker-compose.override.yml
+*.env
+*.env.local
+*.env.development
+*.env.production
+*.env.test
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
