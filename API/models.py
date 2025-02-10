@@ -1,8 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float
-from API.database import Base
+from pydantic import BaseModel
 
-class Budget(Base):
-    __tablename__ = "budgets"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    amount = Column(Float)
+class Budget(BaseModel):
+    income: float
+    expenses: float

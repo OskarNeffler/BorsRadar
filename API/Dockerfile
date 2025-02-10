@@ -1,18 +1,9 @@
-FROM python:3.12-slim
+FROM python:3.9-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Set work directory
 WORKDIR /app
 
-# Install dependencies
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+COPY . /app
 
-# Copy project
-COPY . /app/
+RUN pip install --no-cache-dir fastapi uvicorn
 
-# Run the setup script to create tables and insert dummy data
-CMD ["sh", "-c", "python setup.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
