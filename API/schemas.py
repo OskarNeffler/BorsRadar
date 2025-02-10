@@ -1,16 +1,14 @@
 from pydantic import BaseModel
-from typing import Optional
 
-class TransactionBase(BaseModel):
-    description: str
+class BudgetBase(BaseModel):
+    name: str
     amount: float
-    type: str  # "income" eller "expense"
 
-class TransactionCreate(TransactionBase):
+class BudgetCreate(BudgetBase):
     pass
 
-class Transaction(TransactionBase):
+class Budget(BudgetBase):
     id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
