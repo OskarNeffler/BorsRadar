@@ -1,18 +1,47 @@
-import React from "react";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
-import Dashboard from "./components/Dashboard";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-const App = () => {
+//Library
+import { ToastContainer } from "react-toastify";
+
+// Layouts
+import Main, { mainLoader } from "./layouts/Main";
+
+// Actions
+import { logoutAction } from "./actions/logout";
+
+// Routes
+import Dashboard, { dashboardAction, dashboardLoader } from "./pages/Dashboard";
+import Error from "./pages/Error";
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Main />,
+    loader: mainLoader,
+    errorElement: <Error />,
+    children: [
+      {
+        index: true,
+        element: <Dashboard />,
+        loader: dashboardLoader,
+        action: dashboardAction,
+        errorElement: <Error />,
+      },
+      {
+        path: "logout",
+        action: logoutAction,
+      },
+    ],
+  },
+]);
+
+function App() {
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <main className="flex-grow">
-        <Dashboard />
-      </main>
-      <Footer />
+    <div className="App">
+      <RouterProvider router={router} />
+      <ToastContainer />
     </div>
   );
-};
+}
 
 export default App;
