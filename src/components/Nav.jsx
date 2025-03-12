@@ -5,30 +5,43 @@ import { Form, NavLink } from "react-router-dom";
 import { TrashIcon } from "@heroicons/react/24/solid";
 
 // assets
-import logomark from "../assets/logomark.svg";
+import radar_green from "../assets/radar_green.svg";
 
 const Nav = ({ userName }) => {
   return (
     <nav>
       <NavLink to="/" aria-label="Go to home">
-        <img src={logomark} alt="" height={30} />
-        <span>BudgetBuddy</span>
+        <img src={radar_green} alt="" height={30} />
+        <span>BörsRadar</span>
       </NavLink>
       {userName && (
-        <Form
-          method="post"
-          action="logout"
-          onSubmit={(event) => {
-            if (!confirm("Delete user and all data?")) {
-              event.preventDefault();
-            }
-          }}
-        >
-          <button type="submit" className="btn btn--warning">
-            <span>Delete User</span>
-            <TrashIcon width={20} />
-          </button>
-        </Form>
+        <div className="flex-sm">
+          <NavLink
+            to="/news"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            <span>Börsnyheter</span>
+          </NavLink>
+          <NavLink
+            to="/logout"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          />
+          <span>Logga ut</span>
+          <Form
+            method="post"
+            action="/logout"
+            onSubmit={(event) => {
+              if (!confirm("Delete user and all data?")) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <button type="submit" className="btn btn--warning">
+              <span>Delete User</span>
+              <TrashIcon width={20} />
+            </button>
+          </Form>
+        </div>
       )}
     </nav>
   );

@@ -1,25 +1,23 @@
 // rrd imports
 import { useLoaderData } from "react-router-dom";
+import { useState, useEffect } from "react";
 
 // library imports
 import { toast } from "react-toastify";
 
 // components
 import Intro from "../components/Intro";
-import AddBudgetForm from "../components/AddBudgetForm";
-import AddExpenseForm from "../components/AddExpenseForm";
 
-//  helper functions
-import { createBudget, createExpense, fetchData, waait } from "../helpers";
+// helper functions
+import { fetchData, waait, truncateText, formatDate } from "../helpers";
 
-// loader
+// --- Loader ---
 export function dashboardLoader() {
   const userName = fetchData("userName");
-  const budgets = fetchData("budgets");
-  return { userName, budgets };
+  return { userName };
 }
 
-// action
+// --- Action ---
 export async function dashboardAction({ request }) {
   await waait();
 
@@ -35,64 +33,106 @@ export async function dashboardAction({ request }) {
       throw new Error("There was a problem creating your account.");
     }
   }
-
-  if (_action === "createBudget") {
-    try {
-      createBudget({
-        name: values.newBudget,
-        amount: values.newBudgetAmount,
-      });
-      return toast.success("Budget created!");
-    } catch (e) {
-      throw new Error("There was a problem creating your budget.");
-    }
-  }
-
-  if (_action === "createExpense") {
-    try {
-      createExpense({
-        name: values.newExpense,
-        amount: values.newExpenseAmount,
-        budgetId: values.newExpenseBudget,
-      });
-      return toast.success(`Expense ${values.newExpense} created!`);
-    } catch (e) {
-      throw new Error("There was a problem creating your expense.");
-    }
-  }
 }
 
+// --- Dashboard-komponenten ---
 const Dashboard = () => {
-  const { userName, budgets } = useLoaderData();
+  const { userName } = useLoaderData();
+  const [newsData, setNewsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Hämta nyheter när användaren är inloggad (dvs. userName finns)
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("http://13.60.23.134/news");
+        if (!response.ok) {
+          throw new Error("Kunde inte hämta nyheter");
+        }
+        const data = await response.json();
+        setNewsData(data);
+        setError(null);
+      } catch (error) {
+        console.error("Error fetching news:", error);
+        setError("Kunde inte hämta nyheter. Kontrollera API-anslutningen.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userName) {
+      fetchNews();
+    }
+  }, [userName]);
 
   return (
     <>
       {userName ? (
+        // Om användare redan är skapad, visa nyheter
         <div className="dashboard">
-          <h1>
+          <h2>
             Welcome back, <span className="accent">{userName}</span>
-          </h1>
-          <div className="grid-sm">
-            {budgets && budgets.length > 0 ? (
-              <div className="grid-lg">
-                <div className="flex-lg">
-                  <AddBudgetForm />
-                  <AddExpenseForm budgets={budgets} />
-                </div>
+          </h2>
+          <div className="grid-lg">
+            <h3> Nyheter från Dagens Industri</h3>
+
+            {loading ? (
+              <div className="grid-sm">
+                <p>Laddar nyheter...</p>
+              </div>
+            ) : error ? (
+              <div className="grid-sm">
+                <p>{error}</p>
+              </div>
+            ) : newsData.length === 0 ? (
+              <div className="grid-sm">
+                <p>Inga nyheter tillgängliga.</p>
               </div>
             ) : (
-              <div className="grid-sm">
-                <p>Personal budgeting is the secret to financial freedom.</p>
-                <p>Create a budget to get started!</p>
-                <AddBudgetForm />
+              <div className="news-container">
+                {newsData.map((article, index) => (
+                  <div key={index} className="news-item">
+                    <a
+                      href={article.url}
+                      className="news-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {article.image_url && (
+                        <div
+                          className="news-image"
+                          style={{
+                            backgroundImage: `url('${article.image_url.replace(
+                              "&width=90&quality=70",
+                              "&width=400&quality=80"
+                            )}')`,
+                          }}
+                        />
+                      )}
+                      <div className="news-content">
+                        <h3 className="news-title">{article.title}</h3>
+                        <p className="news-summary">
+                          {truncateText(article.summary, 150)}
+                        </p>
+                        <small className="news-date">
+                          {formatDate(article.date)}
+                        </small>
+                      </div>
+                    </a>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
       ) : (
+        // Om ingen användare finns, visa Intro-komponenten med formuläret
         <Intro />
       )}
     </>
   );
 };
+
 export default Dashboard;
