@@ -1,0 +1,8 @@
+SQLAlchemy
+alembic
+fastapi[all]
+psycopg2-binary # PÅ LINUX
+selenium
+webdriver-manager
+beautifulsoup4
+openai
