@@ -1,65 +1,90 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from bs4 import BeautifulSoup
-import requests
-from typing import List, Optional
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from typing import List, Optional
+import requests
+from bs4 import BeautifulSoup
 import time
-from datetime import datetime
-import os
-import json
-import sys
 import logging
+import json
+import os
+import sys
+from datetime import datetime
+import threading
 from dotenv import load_dotenv
-
-# Ladda miljövariabler från .env-filen
-load_dotenv()
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Konfigurera loggning
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app/API/börsradar_api.log"),
+        logging.StreamHandler()
+    ]
 )
-logger = logging.getLogger("api")
+logger = logging.getLogger("börsradar-api")
 
-# Lägg till relativ import för PodcastScraper
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ladda miljövariabler
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+
+# Importera lokala moduler med felhantering
 try:
-    from podcastscraper import PodcastScraper
-    logger.info("PodcastScraper importerad")
+    from .podcastscraper import PodcastScraper
+    from .cache_updater import NewsUpdater
+    logger.info("Lokala moduler importerade framgångsrikt")
 except ImportError as e:
-    logger.error(f"Kunde inte importera PodcastScraper: {e}")
+    logger.error(f"Kunde inte importera lokala moduler: {e}")
     PodcastScraper = None
+    NewsUpdater = None
 
 # Skapa FastAPI-instans
-app = FastAPI(title="BörsRadar API")
+app = FastAPI(
+    title="BörsRadar API",
+    description="API för aktienyheter och podcast-analys",
+    version="1.0.0"
+)
 
-# Spotify-inloggningsuppgifter från miljövariabler
-spotify_username = os.getenv("SPOTIFY_USERNAME", "")
-spotify_password = os.getenv("SPOTIFY_PASSWORD", "")
+# Konfigurera CORS
+origins = [
+    "http://localhost:5173",  # Vite standardport
+    "http://localhost:3000",  # React standardport
+    "https://börsradar.se",   # Produktionsdomän (uppdatera med din domän)
+    "*"  # Utvecklingsläge - begränsa i produktion
+]
 
-# Skapa scraper endast om inloggningsuppgifter finns
-podcast_scraper = None
-if PodcastScraper and spotify_username and spotify_password:
-    try:
-        podcast_scraper = PodcastScraper(spotify_username, spotify_password)
-        logger.info("PodcastScraper initierad")
-    except Exception as e:
-        logger.error(f"Fel vid initiering av PodcastScraper: {e}")
-
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # För produktion, ange specifika domäner
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --------------------------------------------------------------
-# Modeller
-# --------------------------------------------------------------
+# Spotify och OpenAI-autentiseringsuppgifter
+spotify_username = os.getenv("SPOTIFY_USERNAME", "")
+spotify_password = os.getenv("SPOTIFY_PASSWORD", "")
+openai_api_key = os.getenv("OPENAI_API_KEY", "")
 
+# Initiera podcast-scraper
+podcast_scraper = None
+if PodcastScraper and spotify_username and spotify_password:
+    try:
+        podcast_scraper = PodcastScraper(
+            spotify_username, 
+            spotify_password, 
+            openai_api_key
+        )
+        logger.info("PodcastScraper initierad framgångsrikt")
+    except Exception as e:
+        logger.error(f"Kunde inte initiera PodcastScraper: {e}")
+
+# Modeller för datavalidering
 class NewsArticle(BaseModel):
     title: str
     summary: str
@@ -68,201 +93,172 @@ class NewsArticle(BaseModel):
     date: Optional[str] = None
 
 class PodcastRequest(BaseModel):
-    podcast_names: List[str]  # Lista av podcastnamn att analysera
-    max_episodes: Optional[int] = 3  # Antal avsnitt per podcast att analysera
+    podcast_namn: List[str]
+    max_avsnitt: Optional[int] = 3
 
 class StockMention(BaseModel):
-    name: str               # Aktie/företagsnamn
-    context: str            # Kontexten där det nämndes (citat)
-    sentiment: str          # Positivt, negativt eller neutralt omnämnande
-    price_info: Optional[str] = None  # Eventuell prisinformation
+    name: str
+    context: str
+    sentiment: str
+    price_info: Optional[str] = None
 
-class EpisodeMention(BaseModel):
-    podcast: str           # Podcast-namn
-    episode: str           # Avsnittets titel
-    date: str              # Publiceringsdatum
-    link: str              # Länk till avsnittet
-    mentions: List[StockMention]  # Lista med aktieomtal i avsnittet
-
-# --------------------------------------------------------------
-# Hjälpfunktioner
-# --------------------------------------------------------------
-
-def fetch_news_from_source():
-    """Hämtar nyheter från Dagens Industri"""
-    logger.info("Hämtar nyheter från Dagens Industri")
+# Funktioner för nyhetsinhämtning
+def scrape_di_nyheter():
+    """Hämta nyhetsartiklar från DI.se med Selenium"""
     try:
-        # Skapa en request till målwebbplatsen
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        }
-        response = requests.get("https://www.di.se/bors/nyheter/", headers=headers)
-        response.raise_for_status()  # Kasta undantag för 4XX/5XX statuskoder
+        # Selenium-konfiguration
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
         
-        # Parsa HTML-innehållet
-        soup = BeautifulSoup(response.text, 'html.parser')
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        # Hitta nyhetssektionen
-        news_section = soup.select_one("section.news-list__wrapper")
-        if not news_section:
-            logger.error("Kunde inte hitta nyhetssektionen")
-            raise HTTPException(status_code=404, detail="News section not found")
+        url = "https://www.di.se/bors/nyheter/"
+        driver.get(url)
+        time.sleep(5)  # Vänta på att sidan ska ladda
         
         # Extrahera artiklar
-        articles = []
-        for article_elem in news_section.select("article.news-item"):
-            # Hämta datum om tillgängligt
-            date_elem = article_elem.select_one("time")
-            date = date_elem.text if date_elem else None
-            
-            # Hämta artikelinnehåll
-            content_wrapper = article_elem.select_one(".news-item__content-wrapper")
-            if not content_wrapper:
-                continue
-                
-            link_elem = content_wrapper.select_one("a")
-            if not link_elem:
-                continue
-                
-            url = f"https://www.di.se{link_elem['href']}" if link_elem['href'].startswith('/') else link_elem['href']
-            
-            # Hämta titel
-            title_elem = content_wrapper.select_one("h2.news-item__heading")
-            title = title_elem.text.strip() if title_elem else "Ingen titel"
-            
-            # Hämta sammanfattning
-            summary_elem = content_wrapper.select_one("p.news-item__text")
-            summary = summary_elem.text.strip() if summary_elem else ""
-            
-            # Hämta bild om tillgänglig
-            image_elem = article_elem.select_one("img.image__el")
-            image_url = None
-            if image_elem and 'src' in image_elem.attrs:
-                image_url = image_elem['src']
-            
-            articles.append(
-                NewsArticle(
-                    title=title,
-                    summary=summary,
-                    url=url,
-                    image_url=image_url,
-                    date=date
-                )
-            )
+        artiklar = []
+        artikel_element = driver.find_elements(By.CSS_SELECTOR, "article.di-teaser")
         
-        logger.info(f"Hämtade {len(articles)} artiklar")
-        return articles
-    
-    except requests.RequestException as e:
-        logger.error(f"Nätverksfel: {e}")
-        raise HTTPException(status_code=503, detail=f"Error fetching news: {str(e)}")
+        for artikel in artikel_element[:20]:  # Begränsa till 20 artiklar
+            try:
+                # Extrahera titel
+                titel_element = artikel.find_element(By.CSS_SELECTOR, "h2.di-teaser__heading")
+                titel = titel_element.text.strip()
+                
+                # Extrahera URL
+                url_element = artikel.find_element(By.CSS_SELECTOR, "a.di-teaser__link")
+                url = url_element.get_attribute("href")
+                
+                # Extrahera bild-URL
+                bild_url = None
+                try:
+                    bild_element = artikel.find_element(By.CSS_SELECTOR, "img.di-teaser__image")
+                    bild_url = bild_element.get_attribute("src")
+                except:
+                    pass
+                
+                # Extrahera sammanfattning
+                sammanfattning = "Ingen sammanfattning"
+                try:
+                    sammanfattning_element = artikel.find_element(By.CSS_SELECTOR, "p.di-teaser__preamble")
+                    sammanfattning = sammanfattning_element.text.strip()
+                except:
+                    pass
+                
+                # Extrahera datum
+                datum = None
+                try:
+                    datum_element = artikel.find_element(By.CSS_SELECTOR, "time")
+                    datum = datum_element.text.strip()
+                except:
+                    pass
+                
+                artiklar.append(NewsArticle(
+                    title=titel,
+                    summary=sammanfattning,
+                    url=url,
+                    image_url=bild_url,
+                    date=datum
+                ))
+                
+            except Exception as e:
+                logger.error(f"Fel vid extrahering av artikeldata: {e}")
+        
+        driver.quit()
+        return artiklar
+        
     except Exception as e:
-        logger.error(f"Oväntat fel: {e}")
-        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+        logger.error(f"Fel vid nyhetsinhämtning: {e}")
+        return []
 
-# Cache för nyheter
-news_cache = {"data": [], "timestamp": 0}
-CACHE_DURATION = 3600  # 1 timme - hur länge cachen är giltig
+# Globala variabler för nyhets-cache
+nyhets_cache = {"data": [], "tidsstämpel": 0}
+CACHE_VARAKTIGHET = 600  # 10 minuter
 
-# --------------------------------------------------------------
-# Rutter - Nyheter
-# --------------------------------------------------------------
-
+# API-rutter
 @app.get("/")
-def read_root():
+def root():
     """Välkomstsida med information om tillgängliga endpoints"""
     return {
-        "message": "Välkommen till BörsRadar API",
+        "meddelande": "Välkommen till BörsRadar API",
         "endpoints": {
-            "/news": "Hämta senaste nyheter från DI",
+            "/nyheter": "Hämta senaste aktienyheterna",
             "/podcasts": "Hämta analyserade podcasts",
-            "/stocks": "Hämta aktieomtal från podcasts",
-            "/analyze-podcasts": "Starta ny podcast-analys"
+            "/aktier": "Hämta aktieomnämnanden från podcasts"
         }
     }
 
-@app.get("/news", response_model=List[NewsArticle])
-def get_news():
-    """Hämta färska nyheter direkt från källan"""
-    return fetch_news_from_source()
+@app.get("/nyheter", response_model=List[NewsArticle])
+def hämta_nyheter():
+    """Hämta de senaste nyheterna"""
+    nuvarande_tid = time.time()
+    
+    # Kontrollera om cachen behöver uppdateras
+    if (nuvarande_tid - nyhets_cache["tidsstämpel"]) > CACHE_VARAKTIGHET or not nyhets_cache["data"]:
+        nyheter = scrape_di_nyheter()
+        nyhets_cache["data"] = nyheter
+        nyhets_cache["tidsstämpel"] = nuvarande_tid
+    
+    return nyhets_cache["data"]
 
-@app.get("/cached-news", response_model=List[NewsArticle])
-def get_cached_news():
-    """Hämta nyheter från cachen, eller uppdatera om cachen är för gammal"""
-    current_time = time.time()
-    if current_time - news_cache["timestamp"] > CACHE_DURATION or not news_cache["data"]:
-        # Cachen är utgången eller tom, uppdatera den
-        news = fetch_news_from_source()
-        news_cache["data"] = news
-        news_cache["timestamp"] = current_time
-        return news
-    else:
-        # Returnera cacheade data
-        return news_cache["data"]
-
-# --------------------------------------------------------------
-# Rutter - Podcasts
-# --------------------------------------------------------------
+@app.get("/hälsa")
+async def hälsokontroll():
+    """Enkel hälsokontroll för API:et"""
+    return {
+        "status": "frisk",
+        "podcast_scraper": "initierad" if podcast_scraper else "ej konfigurerad",
+        "tidsstämpel": datetime.now().isoformat()
+    }
 
 @app.get("/podcasts")
-async def get_analyzed_podcasts():
-    """Hämta alla analyserade podcasts."""
+async def hämta_analyserade_podcasts():
+    """Hämta alla analyserade podcasts"""
     if not podcast_scraper:
         raise HTTPException(status_code=500, detail="Podcast-scraper är inte konfigurerad")
     
-    # Hämta resultat från tidigare analyser
-    results = podcast_scraper.get_latest_results()
-    return {"podcasts": results}
+    resultat = podcast_scraper.get_latest_results()
+    return {"podcasts": resultat}
 
-@app.get("/podcasts/{podcast_name}")
-async def get_podcast_analysis(podcast_name: str):
-    """Hämta analys för en specifik podcast."""
+@app.post("/analysera-podcasts")
+async def analysera_podcasts(förfrågan: PodcastRequest):
+    """Starta en ny podcast-analys"""
     if not podcast_scraper:
         raise HTTPException(status_code=500, detail="Podcast-scraper är inte konfigurerad")
     
-    # Hämta resultat för en specifik podcast
-    result = podcast_scraper.get_latest_results(podcast_name)
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Ingen analys hittad för {podcast_name}")
-    return result
-
-@app.get("/stocks")
-async def get_stock_mentions(stock_name: Optional[str] = None):
-    """
-    Hämta omnämnanden av aktier.
-    Om stock_name anges, filtrera efter det aktienamnet.
-    """
-    if not podcast_scraper:
-        raise HTTPException(status_code=500, detail="Podcast-scraper är inte konfigurerad")
+    def kör_analys():
+        try:
+            podcast_scraper.run(förfrågan.podcast_namn, förfrågan.max_avsnitt)
+        except Exception as e:
+            logger.error(f"Fel under podcast-analys: {e}")
     
-    # Hämta aktieomtal, med valfri filtrering på aktienamn
-    mentions = podcast_scraper.get_stock_mentions(stock_name)
-    return {"mentions": mentions}
-
-@app.post("/analyze-podcasts")
-async def analyze_podcasts(request: PodcastRequest):
-    """
-    Starta en ny analys av podcasts.
-    Detta är en långkörande process som körs i bakgrunden.
-    """
-    if not podcast_scraper:
-        raise HTTPException(status_code=500, detail="Podcast-scraper är inte konfigurerad")
-    
-    # Starta analysen i en separat tråd för att inte blockera API:t
-    import threading
-    
-    def run_analysis():
-        podcast_scraper.run(request.podcast_names, request.max_episodes)
-    
-    thread = threading.Thread(target=run_analysis)
+    # Kör analysen i en separat tråd
+    thread = threading.Thread(target=kör_analys)
     thread.daemon = True
     thread.start()
     
-    return {"message": f"Analys startad för {len(request.podcast_names)} podcasts"}
+    return {
+        "meddelande": f"Analys startad för {len(förfrågan.podcast_namn)} podcasts", 
+        "podcasts": förfrågan.podcast_namn
+    }
 
-# --------------------------------------------------------------
-# Huvud-entry point
-# --------------------------------------------------------------
+# Global undantagshanterare
+@app.exception_handler(Exception)
+async def global_undantagshanterare(request: Request, exc: Exception):
+    """Catch-all undantagshanterare för oväntade fel"""
+    logger.error(f"Ohanterat undantag: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detalj": "Ett oväntat fel inträffade",
+            "fel": str(exc)
+        }
+    )
+
+# Huvudsaklig startpunkt för applikationen
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
