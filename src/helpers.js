@@ -48,22 +48,39 @@ export const formatCurrency = (amt) => {
   });
 };
 
-// Funktion för att formatera datum
 export const formatDate = (dateString) => {
-  if (!dateString) return "Nyligen publicerad";
-
-  // Om det är "I dag", returnera det
-  if (dateString === "I dag") return dateString;
+  // Om inget datum finns, returnera standardvärde
+  if (!dateString) {
+    return "Nyligen uppdaterad";
+  }
 
   try {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("sv-SE", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }).format(date);
+    // Garantera att vi har en strängrepresentation
+    const dateStr =
+      typeof dateString === "object" && dateString instanceof Date
+        ? dateString.toISOString()
+        : String(dateString);
+
+    // Skapa Date-objekt
+    const date = new Date(dateStr);
+
+    // Kontrollera om datumet är giltigt
+    if (isNaN(date.getTime())) {
+      return "Nyligen uppdaterad";
+    }
+
+    // Formatera till tydligt, svenskt format: "19 mar 14:30"
+    const dag = date.getDate();
+    const månad = new Intl.DateTimeFormat("sv-SE", { month: "short" }).format(
+      date
+    );
+    const timme = date.getHours().toString().padStart(2, "0");
+    const minut = date.getMinutes().toString().padStart(2, "0");
+
+    return `${dag} ${månad} ${timme}:${minut}`;
   } catch (e) {
-    return dateString;
+    console.error("Fel vid datumformatering:", e);
+    return "Nyligen uppdaterad";
   }
 };
 

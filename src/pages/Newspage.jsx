@@ -1,34 +1,30 @@
 import { useLoaderData, useNavigation } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "react-toastify";
-import { formatDate, truncateText } from "../helpers";
+import { formatDate, truncateText, cacheNewsData } from "../helpers";
 
 const NewsPage = () => {
   const { newsData } = useLoaderData();
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
-
+  const [lastUpdated] = useState(new Date());
+  // I NewsPage.jsx, lägg till detta för att inspektera datan
+  console.log("Nyhetsdatan:", newsData);
+  // Kontrollera specifikt om publishedAt finns
+  console.log("Första artikelns publishedAt:", newsData[0]?.publishedAt);
+  // Kontrollera specifikt om imageUrl finns
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch("http://13.60.23.134/news/refresh");
+      const response = await fetch("http://51.20.22.69:3000/api/articles");
       if (!response.ok) {
         throw new Error("Kunde inte uppdatera nyheter");
       }
-      const result = await response.json();
-      if (result.success) {
-        const newsResponse = await fetch("http://13.60.23.134/news");
-        if (!newsResponse.ok) {
-          throw new Error("Kunde inte hämta nya nyheter");
-        }
-        const freshNewsData = await newsResponse.json();
-        // Här behöver du hantera cachen via en funktion, t.ex. importera och anropa en funktion från helpers
-        // Exempel: cacheNewsData(freshNewsData);
-        window.location.reload();
-        toast.success("Nyheterna har uppdaterats");
-      } else {
-        throw new Error("Kunde inte uppdatera nyheterna");
-      }
+
+      const freshNewsData = await response.json();
+      cacheNewsData(freshNewsData);
+      window.location.reload();
+      toast.success("Nyheterna har uppdaterats");
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -57,6 +53,9 @@ const NewsPage = () => {
       <div className="grid-sm">
         <p>
           Senaste nyheterna från finansmarknaden, direkt från Dagens Industri.
+          <small style={{ display: "block", marginTop: "5px" }}>
+            Senast uppdaterad: {formatDate(lastUpdated)}
+          </small>
         </p>
       </div>
 
@@ -78,11 +77,11 @@ const NewsPage = () => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {article.image_url && (
+                {article.imageUrl && (
                   <div
                     className="news-image"
                     style={{
-                      backgroundImage: `url('${article.image_url.replace(
+                      backgroundImage: `url('${article.imageUrl.replace(
                         "&width=90&quality=70",
                         "&width=400&quality=80"
                       )}')`,
@@ -95,7 +94,15 @@ const NewsPage = () => {
                     {truncateText(article.summary, 150)}
                   </p>
                   <small className="news-date">
-                    {formatDate(article.date)}
+                    {(() => {
+                      console.log(
+                        `Artikel "${article.title}": publishedAt =`,
+                        article.publishedAt
+                      );
+                      return article.publishedAt
+                        ? formatDate(article.publishedAt)
+                        : "Nyligen publicerad";
+                    })()}
                   </small>
                 </div>
               </a>

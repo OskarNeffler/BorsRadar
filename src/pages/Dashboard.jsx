@@ -47,7 +47,7 @@ const Dashboard = () => {
     const fetchNews = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://13.60.23.134/news");
+        const response = await fetch("http://51.20.22.69:3000/api/articles");
         if (!response.ok) {
           throw new Error("Kunde inte hämta nyheter");
         }

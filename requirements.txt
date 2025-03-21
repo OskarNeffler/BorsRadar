@@ -6,3 +6,11 @@ selenium
 webdriver-manager
 beautifulsoup4
 openai
+python-dotenv
+requests
+pandas
+pytest
+uvicorn
+python-multipart
+pydantic
+dotenv
