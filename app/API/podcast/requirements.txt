@@ -1,0 +1,18 @@
+# API Clients
+google-api-python-client>=2.90.0
+vertexai>=1.70.0
+yt-dlp>=2024.3.10
+python-dotenv>=1.0.0
+google-generativeai
+# Data Processing
+pandas>=2.0.2
+
+# AI
+google-cloud-aiplatform>=1.70.0
+
+# CLI and Formatting
+colorama>=0.4.6
+
+# Web Scraping
+requests>=2.31.0
+beautifulsoup4>=4.12.0
