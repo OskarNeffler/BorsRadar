@@ -12,6 +12,9 @@ dotenv
 .env.local
 .env
 
+#macos-sytem files
+.DS_Store
+
 # Node modules
 node_modules
 
