@@ -22,11 +22,28 @@ const Nav = ({ userName }) => {
           >
             <span>Börsnyheter</span>
           </NavLink>
+
+          <NavLink
+            to="/podcasts"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            <span>Podcasts</span>
+          </NavLink>
+
+          <NavLink
+            to="/related-content"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            <span>Relaterat Innehåll</span>
+          </NavLink>
+
           <NavLink
             to="/logout"
             className={({ isActive }) => (isActive ? "active" : "")}
-          />
-          <span>Logga ut</span>
+          >
+            <span>Logga ut</span>
+          </NavLink>
+
           <Form
             method="post"
             action="/logout"

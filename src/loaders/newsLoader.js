@@ -5,26 +5,22 @@ import { toast } from "react-toastify";
 export async function newsLoader() {
   console.log("NewsLoader: Starting loader function");
 
-  // Always log to help with debugging
-  await waait(500);
-
-  // Check for cached news first
+  // Kolla om vi har cachade nyheter först
   const cachedNews = getCachedNews();
   if (cachedNews) {
     console.log("NewsLoader: Using cached news", cachedNews);
-    // Returnar en array direkt
     return { newsData: cachedNews };
   }
 
   try {
     console.log("NewsLoader: Attempting to fetch news from API");
 
-    // Use absolute URL with full path
-    const apiUrl = "http://51.20.22.69:3000/api/bors-nyheter";
+    // Använd direkt URL till ditt news_articles API
+    const apiUrl = "http://13.61.135.153:8000/news-articles";
 
-    // Increased timeout and added more detailed error handling
+    // Öka timeout och lägg till mer detaljerad felhantering
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 sekunders timeout
 
     const response = await fetch(apiUrl, {
       method: "GET",
@@ -38,10 +34,6 @@ export async function newsLoader() {
     clearTimeout(timeoutId);
 
     console.log("NewsLoader: Response status", response.status);
-    console.log(
-      "NewsLoader: Response headers:",
-      Object.fromEntries(response.headers.entries())
-    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -49,19 +41,28 @@ export async function newsLoader() {
       throw new Error(`Could not fetch news: ${response.status} ${errorText}`);
     }
 
-    // Servern returnerar ett objekt: { total, offset, limit, articles: [...] }
-    const serverData = await response.json();
+    // API förväntas returnera ett objekt med news_articles
+    const data = await response.json();
 
-    // Plocka ut en ren array så att front-end kan göra newsData.map()
-    const newsData = serverData.articles || [];
+    // Mappa om artiklarna till det format som din frontend förväntar sig
+    const newsData = (data.news_articles || []).map((article) => ({
+      id: article.id,
+      title: article.title,
+      summary: article.summary || "",
+      url: article.url || "#",
+      imageUrl: article.image_url || null,
+      publishedAt: article.published_at,
+      source: article.source || "Börsnyheter",
+      content: article.content || "",
+    }));
 
     console.log("NewsLoader: Fetched news data", newsData);
 
     if (newsData.length === 0) {
       console.warn("NewsLoader: Received empty news data");
-      toast.warn("No news found");
+      toast.warn("Inga nyheter hittades");
     } else {
-      // Only cache if we have actual data
+      // Cacha endast om vi har faktiska data
       cacheNewsData(newsData);
     }
 
@@ -73,13 +74,13 @@ export async function newsLoader() {
       stack: error.stack,
     });
 
-    // More specific error handling
+    // Mer specifik felhantering
     if (error.name === "AbortError") {
-      toast.error("News fetch timed out");
+      toast.error("Nyhetshämtning timeout");
     } else if (error.name === "TypeError") {
-      toast.error("Network error. Check your connection.");
+      toast.error("Nätverksfel. Kontrollera din anslutning.");
     } else {
-      toast.error(`Failed to fetch news: ${error.message}`);
+      toast.error(`Kunde inte hämta nyheter: ${error.message}`);
     }
 
     return { newsData: [] };

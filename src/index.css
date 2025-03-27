@@ -1,101 +1,4 @@
 /* --------------------------- */
-/* Nyhetskomponenter           */
-/* --------------------------- */
-
-.news-container {
-  display: grid;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(300px, 1fr)
-  ); /* Se till att korten har en minsta bredd */
-  gap: var(--space-md);
-  width: 50%; /* Gör så att nyheterna endast tar upp halva skärmen */
-  margin-left: 0; /* Flyttar allt till vänster */
-}
-
-.news-item {
-  background-color: hsl(var(--bkg));
-  border-radius: var(--round-md);
-  overflow: hidden;
-  box-shadow: 0.25em 0.3em 1em hsl(var(--muted) / 0.2);
-  transition: transform 0.2s, box-shadow 0.2s;
-  height: auto;
-  max-width: 100%; /* Låt korten anpassa sig inom container */
-  border: 2px solid hsl(var(--light));
-}
-
-/* För att korten ska ha samma utseende på bred skärm */
-@media screen and (min-width: 1200px) {
-  .news-container {
-    width: 50%; /* Behåll halva skärmen */
-  }
-
-  .news-item {
-    max-width: 100%; /* Se till att de fyller sin del av grid */
-  }
-}
-
-.news-item:hover {
-  transform: translateY(-5px);
-  box-shadow: 0.25em 0.5em 1.5em hsl(var(--muted) / 0.3);
-  border-color: hsl(var(--accent));
-}
-
-.news-image {
-  height: 180px;
-  background-color: hsl(var(--light));
-  background-size: cover;
-  background-position: center;
-}
-
-.news-content {
-  padding: var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.news-title {
-  font-size: var(--fs-300);
-  font-weight: bold;
-  color: hsl(var(--text));
-  line-height: var(--lh-1-1);
-  margin-bottom: var(--space-xs);
-}
-
-.news-summary {
-  font-size: var(--fs-200);
-  color: hsl(var(--muted));
-  display: -webkit-box; /* för att stödja text-truncation i WebKit */
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-bottom: var(--space-sm);
-}
-
-.news-date {
-  font-size: var(--fs-200);
-  color: hsl(var(--accent));
-  align-self: flex-start;
-  padding: var(--space-xs) var(--space-sm);
-  background-color: hsl(var(--accent) / 0.1);
-  border-radius: var(--round-full);
-}
-
-.news-link {
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.news-link:hover {
-  text-decoration: none;
-}
-
-/* --------------------------- */
 /* Grundläggande reset & setup */
 /* --------------------------- */
 
@@ -253,11 +156,21 @@ p {
   gap: var(--space-xs);
   max-width: fit-content;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
 :where(.btn):is(:hover, :focus-visible) {
   background-color: var(--backdrop);
   color: var(--color);
+}
+
+:where(.btn):hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+:where(.btn):active:not(:disabled) {
+  transform: translateY(0);
 }
 
 :where(.btn--dark) {
@@ -464,18 +377,23 @@ select {
 
 .form-wrapper {
   flex: 1 1 48%;
-  max-width: 800px;
+  max-width: none;
   position: relative;
   display: grid;
   gap: var(--space-sm);
-  background-color: var(--bkg);
+  background-color: hsl(var(--bkg));
   padding: var(--space-xl);
   border-radius: var(--round-lg);
-  box-shadow: 0.25em 0.3em 1em hsl(var(--muted) / 0.2);
+  box-shadow: 0 4px 10px hsl(var(--muted) / 0.15);
+  transition: box-shadow 0.3s ease;
   border-top: 0.15em solid white;
   border-left: 0.15em solid white;
   border-right: 0.15em solid hsl(var(--bkg));
   border-bottom: 0.15em solid hsl(var(--bkg));
+}
+
+.form-wrapper:hover {
+  box-shadow: 0 10px 15px hsl(var(--muted) / 0.2);
 }
 
 .form-wrapper::before {
@@ -545,14 +463,22 @@ progress[value]::-webkit-progress-value {
 
 .table {
   overflow-x: auto;
+  border-radius: var(--round-md);
+  box-shadow: 0 2px 4px hsl(var(--muted) / 0.15);
 }
 
 table {
   width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 tr:nth-child(odd) {
   background-color: hsl(var(--accent) / 0.04);
+}
+
+tr:hover {
+  background-color: hsl(var(--accent) / 0.08);
 }
 
 td {
@@ -566,8 +492,14 @@ thead > tr:nth-child(odd) {
 
 td,
 th {
-  text-align: center;
-  padding: var(--space-xs);
+  text-align: left;
+  padding: 0.75rem 0.5rem;
+}
+
+th {
+  border-bottom: 2px solid hsl(var(--accent) / 0.2);
+  font-weight: 600;
+  color: hsl(var(--text));
 }
 
 table .btn {
@@ -590,31 +522,199 @@ table a {
   font-size: var(--fs-300);
 }
 
-/* Ny/uppdaterad CSS för <img> och placeholder */
-.news-image-tag {
-  width: 100%;
-  height: 180px;
-  object-fit: cover; /* beskär bilden på ett snyggt sätt */
-  background-color: hsl(var(--light));
+/* --------------------------- */
+/* Nyhetskomponenter           */
+/* --------------------------- */
+
+.news-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-md);
+  width: 100%; /* Använd hela bredden */
+  margin: 0;
 }
 
-/*.news-image-placeholder {
-  width: 100%;
-  height: 180px;
+.news-item {
+  background-color: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  overflow: hidden;
+  box-shadow: 0 4px 8px hsl(var(--muted) / 0.15);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  border: 2px solid hsl(var(--light));
+  height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: hsl(var(--light));
-  font-size: var(--fs-200);
-  color: hsl(var(--muted));
-  text-transform: uppercase;
+  flex-direction: column;
 }
 
-/* Resten av din CSS för .news-container, .news-item, .news-content etc. */
+.news-item:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 10px 20px hsl(var(--muted) / 0.25);
+  border-color: hsl(var(--accent));
+}
+
+.news-image {
+  height: 160px;
+  background-color: hsl(var(--light));
+  background-size: cover;
+  background-position: center;
+}
 
 .news-image-tag {
   width: 100%;
-  height: 180px;
+  height: 160px;
   object-fit: cover;
   background-color: hsl(var(--light));
+}
+
+.news-content {
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1;
+}
+
+.news-title {
+  font-size: var(--fs-300);
+  font-weight: bold;
+  color: hsl(var(--text));
+  line-height: var(--lh-1-1);
+  margin-bottom: var(--space-xs);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.news-summary {
+  font-size: var(--fs-200);
+  color: hsl(var(--muted));
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: var(--space-sm);
+}
+
+.news-date {
+  font-size: var(--fs-200);
+  color: hsl(var(--accent));
+  align-self: flex-start;
+  padding: var(--space-xs) var(--space-sm);
+  background-color: hsl(var(--accent) / 0.1);
+  border-radius: var(--round-full);
+}
+
+.news-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.news-link:hover {
+  text-decoration: none;
+}
+
+/* --------------------------- */
+/* Podcast Dashboard           */
+/* --------------------------- */
+
+/* Förbättra podcast-listan */
+.podcast-episode-list {
+  max-height: 500px;
+  overflow-y: auto;
+  background-color: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  padding: 0.5rem;
+  box-shadow: inset 0 2px 4px hsl(var(--muted) / 0.1);
+}
+
+/* Stil för nyhetstyp-etikett */
+.content-type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: var(--round-full);
+  margin-bottom: 0.5rem;
+}
+
+.content-type-badge.news {
+  background-color: hsl(var(--accent) / 0.15);
+  color: hsl(var(--accent));
+}
+
+.content-type-badge.podcast {
+  background-color: hsl(220, 60%, 50%, 0.15);
+  color: hsl(220, 60%, 50%);
+}
+
+/* Sentiment-färger för bättre visualisering */
+.sentiment-positive {
+  background-color: hsl(150, 60%, 90%);
+  color: hsl(150, 60%, 30%);
+}
+
+.sentiment-negative {
+  background-color: hsl(0, 60%, 90%);
+  color: hsl(0, 60%, 35%);
+}
+
+.sentiment-neutral {
+  background-color: hsl(var(--light));
+  color: hsl(var(--muted));
+}
+
+/* --------------------------- */
+/* Laddningsindikator          */
+/* --------------------------- */
+
+/* Snyggare laddningsindikator */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid hsl(var(--light));
+  border-radius: 50%;
+  border-top-color: hsl(var(--accent));
+  animation: spin 1s linear infinite;
+  margin: 2rem auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --------------------------- */
+/* Responsiv design            */
+/* --------------------------- */
+
+/* Bättre responsiv layout för mobil */
+@media screen and (max-width: 767px) {
+  .news-container {
+    grid-template-columns: 1fr;
+  }
+
+  .flex-lg {
+    flex-direction: column;
+  }
+
+  /* För relaterat innehåll på mobil */
+  .flex-lg > div[style*="width: 250px"] {
+    width: 100% !important;
+    margin-bottom: var(--space-md);
+  }
+
+  .table {
+    max-width: calc(100vw - 2rem);
+  }
+}
+
+/* Responsiv mellanstor skärm */
+@media screen and (min-width: 768px) and (max-width: 1200px) {
+  .news-container {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
 }

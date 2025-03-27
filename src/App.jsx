@@ -15,6 +15,11 @@ import Dashboard, { dashboardAction, dashboardLoader } from "./pages/Dashboard";
 import Error from "./pages/Error";
 import NewsPage from "./pages/Newspage";
 import { newsLoader } from "./loaders/newsLoader";
+import RelatedContentPage from "./pages/RelatedContentPage";
+import { relatedContentLoader } from "./loaders/relatedContentLoader";
+import PodcastDashboardPage, {
+  podcastDashboardLoader,
+} from "./pages/PodcastDashboardPage";
 
 const router = createBrowserRouter([
   {
@@ -27,6 +32,18 @@ const router = createBrowserRouter([
         path: "news",
         element: <NewsPage />,
         loader: newsLoader,
+        errorElement: <Error />,
+      },
+      {
+        path: "podcasts",
+        element: <PodcastDashboardPage />,
+        loader: podcastDashboardLoader,
+        errorElement: <Error />,
+      },
+      {
+        path: "related-content",
+        element: <RelatedContentPage />,
+        loader: relatedContentLoader,
         errorElement: <Error />,
       },
       {
