@@ -47,12 +47,18 @@ const Dashboard = () => {
     const fetchNews = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://51.20.22.69:3000/api/articles");
+        const response = await fetch(
+          "http://51.20.22.69:3000/api/bors-nyheter"
+        );
         if (!response.ok) {
           throw new Error("Kunde inte hämta nyheter");
         }
+
+        // API-svaret: { total, offset, limit, articles: [...] }
         const data = await response.json();
-        setNewsData(data);
+        const articlesArray = data.articles || [];
+
+        setNewsData(articlesArray);
         setError(null);
       } catch (error) {
         console.error("Error fetching news:", error);
@@ -76,7 +82,7 @@ const Dashboard = () => {
             Welcome back, <span className="accent">{userName}</span>
           </h2>
           <div className="grid-lg">
-            <h3> Nyheter från Dagens Industri</h3>
+            <h3>Nyheter från Dagens Industri</h3>
 
             {loading ? (
               <div className="grid-sm">
@@ -92,37 +98,47 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="news-container">
-                {newsData.map((article, index) => (
-                  <div key={index} className="news-item">
-                    <a
-                      href={article.url}
-                      className="news-link"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {article.image_url && (
-                        <div
-                          className="news-image"
-                          style={{
-                            backgroundImage: `url('${article.image_url.replace(
-                              "&width=90&quality=70",
-                              "&width=400&quality=80"
-                            )}')`,
-                          }}
-                        />
-                      )}
-                      <div className="news-content">
-                        <h3 className="news-title">{article.title}</h3>
-                        <p className="news-summary">
-                          {truncateText(article.summary, 150)}
-                        </p>
-                        <small className="news-date">
-                          {formatDate(article.date)}
-                        </small>
-                      </div>
-                    </a>
-                  </div>
-                ))}
+                {newsData.map((article, index) => {
+                  // Byt ut &width=90&quality=70 mot en större variant
+                  const biggerImageUrl = article.imageUrl
+                    ? article.imageUrl.replace(
+                        "&width=90&quality=70",
+                        "&width=400&quality=80"
+                      )
+                    : null;
+
+                  return (
+                    <div key={index} className="news-item">
+                      <a
+                        href={article.url}
+                        className="news-link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {/* Visa endast <img> om vi har en bild-URL */}
+                        {biggerImageUrl && (
+                          <img
+                            src={biggerImageUrl}
+                            alt={article.title}
+                            className="news-image-tag"
+                          />
+                        )}
+
+                        <div className="news-content">
+                          <h3 className="news-title">{article.title}</h3>
+                          <p className="news-summary">
+                            {truncateText(article.summary, 150)}
+                          </p>
+                          <small className="news-date">
+                            {article.publishedAt
+                              ? formatDate(article.publishedAt)
+                              : "Nyligen publicerad"}
+                          </small>
+                        </div>
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

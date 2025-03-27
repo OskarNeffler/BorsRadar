@@ -589,3 +589,32 @@ table a {
 .Toastify__toast-body {
   font-size: var(--fs-300);
 }
+
+/* Ny/uppdaterad CSS för <img> och placeholder */
+.news-image-tag {
+  width: 100%;
+  height: 180px;
+  object-fit: cover; /* beskär bilden på ett snyggt sätt */
+  background-color: hsl(var(--light));
+}
+
+/*.news-image-placeholder {
+  width: 100%;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: hsl(var(--light));
+  font-size: var(--fs-200);
+  color: hsl(var(--muted));
+  text-transform: uppercase;
+}
+
+/* Resten av din CSS för .news-container, .news-item, .news-content etc. */
+
+.news-image-tag {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  background-color: hsl(var(--light));
+}

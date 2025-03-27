@@ -60,14 +60,22 @@ class YouTubePodcastAnalyzer:
         self.db_session = None
         if db_url:
             try:
-                from BorsRadar.app.API.podcast.podcast_scraper.models import Base
+                from models import Base
+                from sqlalchemy.orm import sessionmaker, scoped_session
+                
+                # Skapa engine
                 self.db_engine = create_engine(db_url)
+                
+                # Skapa alla tabeller
                 Base.metadata.create_all(self.db_engine)
-                Session = sessionmaker(bind=self.db_engine)
-                self.db_session = Session()
-                logger.info("Database connection established")
+                
+                # Skapa en sessionsfabrik med scoped_session
+                session_factory = sessionmaker(bind=self.db_engine)
+                self.db_session = scoped_session(session_factory)
+                
+                logger.info("Database connection and session established successfully")
             except Exception as e:
-                logger.error(f"Error connecting to database: {e}")
+                logger.error(f"Error establishing database connection: {e}")
                 self.db_engine = None
                 self.db_session = None
 
@@ -180,8 +188,24 @@ class YouTubePodcastAnalyzer:
         except Exception as e:
             logger.error(f"Error extracting transcript from HTML: {e}")
             return None
-    
     def get_transcript_from_website(self, video_url):
+        transcript_methods = [
+            self._method_youtubetotranscript,
+            self._method_alternative_transcript,
+            self._method_youtube_description
+        ]
+        
+        for method in transcript_methods:
+            try:
+                transcript = method(video_url)
+                if transcript and len(transcript) > 100:
+                    return transcript
+            except Exception as e:
+                logger.warning(f"Transcript method {method.__name__} failed: {e}")
+        
+        return None
+
+    def _method_youtubetotranscript(self, video_url):
         """
         Get transcript from YouTubeToTranscript.com
         
@@ -289,6 +313,60 @@ class YouTubePodcastAnalyzer:
             logger.error(f"Error getting transcript from website: {e}")
             return None
     
+    def _method_alternative_transcript(self, video_url):
+        """
+        Alternativ metod för att hämta transkript med yt-dlp
+        """
+        try:
+            import yt_dlp
+            
+            ydl_opts = {
+                'writesubtitles': True,
+                'writeautomaticsub': True,
+                'subtitleslangs': ['sv', 'en'],
+                'skip_download': True,
+                'outtmpl': os.path.join(self.data_dir, 'transcripts', '%(id)s.%(ext)s')
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info_dict = ydl.extract_info(video_url, download=False)
+                video_id = info_dict.get('id', None)
+                
+                if video_id:
+                    # Försök hitta svenska eller engelska undertexter
+                    for lang in ['sv', 'en']:
+                        subtitle_file = os.path.join(
+                            self.data_dir, 
+                            'transcripts', 
+                            f'{video_id}.{lang}.vtt'
+                        )
+                        
+                        if os.path.exists(subtitle_file):
+                            with open(subtitle_file, 'r', encoding='utf-8') as f:
+                                return f.read()
+            
+            return None
+        except Exception as e:
+            logger.warning(f"Alternative transcript method failed: {e}")
+            return None
+
+    def _method_youtube_description(self, video_url):
+        """
+        Fallback-metod som hämtar och analyserar videobeskrivningen
+        """
+        try:
+            video_info = self.get_video_info(video_url)
+            description = video_info.get('description', '')
+            
+            if description and len(description) > 200:
+                logger.info("Using video description as transcript fallback")
+                return description
+            
+            return None
+        except Exception as e:
+            logger.warning(f"YouTube description method failed: {e}")
+            return None
+
     def get_video_info(self, video_url):
         """
         Get video information using YouTube API
@@ -475,138 +553,169 @@ class YouTubePodcastAnalyzer:
         :param text: Text to analyze
         :param podcast_name: Podcast name
         :param episode_title: Episode title
-        :return: Analysis result
+        :return: Analysis result or None if quality is insufficient
         """
-        try:
-            # Prioritera self.google_api_key om det finns
-            api_key = self.google_api_key or os.getenv('GOOGLE_API_KEY')
-            
-            if not api_key:
-                return {
-                    "summary": "Gemini API not configured",
-                    "mentions": []
-                }
-            
+        max_retries = 3
+        retry_delay = 10  # sekunder mellan försök
+
+        for attempt in range(max_retries):
             try:
-                import google.generativeai as genai
+                # Behåll befintlig kod för API-nyckel och import
+                api_key = self.google_api_key or os.getenv('GOOGLE_API_KEY')
                 
-                # Configure with API key
-                genai.configure(api_key=api_key)
-                
-                # Limit text length if too long
-                if len(text) > 90000:
-                    logger.info(f"Text is very long ({len(text)} characters), limiting to 90,000 characters")
-                    text = text[:90000]
-                
-                prompt = f"""
-                Podcast Analysis: "{podcast_name}" - Episode: "{episode_title}"
-
-                Analysera denna svenskspråkiga podcast-transkription med fokus på den svenska och nordiska finansmarknaden:
-
-                1. Skriv en koncis sammanfattning på svenska (3-5 meningar) som fångar huvudämnena i podcasten
-                2. Identifiera alla omnämnanden av:
-                - Svenska börshörnbolag (från Stockholmsbörsen, First North, NGM)
-                - Nordiska börsnoterade bolag
-                - Globala aktier som diskuteras i en svensk kontext
-                - Finansiella instrument och investeringsprodukter (fonder, ETF:er, certifikat, etc.)
-
-                För varje omnämnande, samla in följande information:
-                - Företagets/aktiens namn
-                - Tickersymbol exakt som den nämns (t.ex. ERIC B, SHB A) eller null om den inte nämns
-                - Ett direkt citat som visar kontexten (högst 150 tecken)
-                - Sentiment (positive/negative/neutral) baserat på hur aktien diskuteras
-                - Rekommendation (buy/sell/hold/none) om sådan nämns eller antyds tydligt
-                - Prisinformation eller prognos om sådan nämns (exakta siffror om möjligt)
-                - En kort beskrivning av varför aktien nämns (t.ex. "kvartalsrapport", "produktlansering", "populär aktie")
-
-                Returnera resultatet som JSON med följande struktur:
-                {{
-                    "summary": "En sammanfattande text på svenska om podcasten",
-                    "mentions": [
-                        {{
-                            "name": "Företagsnamn",
-                            "ticker": "Tickersymbol eller null",
-                            "context": "Citat från texten",
-                            "sentiment": "positive/negative/neutral",
-                            "recommendation": "buy/sell/hold/none",
-                            "price_info": "Prisinformation eller null",
-                            "mention_reason": "Orsak till omnämnande"
-                        }}
-                    ]
-                }}
-
-                VIKTIGT: 
-                - Inkludera INTE några kommentarer, förklaringar eller anteckningar i JSON-svaret
-                - JSON måste vara helt giltig utan några kommentarer eller förklaringar
-                - Använd "null" för värden som saknas, inte tomma strängar
-                - Var så exakt och specifik som möjligt med tickersymboler (inkludera A/B/C-suffixet för svenska aktier)
-                - För sentiment, använd endast värdena "positive", "negative" eller "neutral"
-                - För recommendation, använd endast värdena "buy", "sell", "hold" eller "none"
-
-                Text att analysera:
-                {text}
-                """
-                
-                # Create model instance
-                model = genai.GenerativeModel("gemini-1.5-pro")
-                
-                # Generate content
-                response = model.generate_content(prompt)
-                
-                # Extract text from the response
-                response_text = response.text
-                
-                # Clean up response if it contains code block markers
-                if response_text.startswith("```json") or response_text.startswith("```"):
-                    # Remove code block markers
-                    response_text = response_text.replace("```json", "").replace("```", "").strip()
-                
-                # Try to parse as JSON
-                try:
-                    result = json.loads(response_text)
-                    logger.info(f"Gemini analysis completed with API key, found {len(result.get('mentions', []))} mentions")
-                    return result
-                except json.JSONDecodeError as e:
-                    logger.error(f"Could not parse Gemini response as JSON: {e}")
-                    logger.error(f"Response text: {response_text}")
-                    # Return default result on error
+                if not api_key:
                     return {
-                        "summary": "Could not analyze the episode",
+                        "summary": "Gemini API not configured",
                         "mentions": []
                     }
                 
-            except ImportError:
-                logger.warning("google.generativeai package not found")
-                return {
-                    "summary": "Gemini API package not installed",
-                    "mentions": []
-                }
+                try:
+                    import google.generativeai as genai
+                    
+                    # Befintlig konfiguration
+                    genai.configure(api_key=api_key)
+                    
+                    # Befintlig längdbegränsning
+                    if len(text) > 90000:
+                        logger.info(f"Text is very long ({len(text)} characters), limiting to 90,000 characters")
+                        text = text[:90000]
+                
+                    prompt = f"""
+                    Podcast Analysis: "{podcast_name}" - Episode: "{episode_title}"
+
+                    Analysera denna svenskspråkiga podcast-transkription med fokus på den svenska och nordiska finansmarknaden:
+
+                    1. Skriv en koncis sammanfattning på svenska (3-5 meningar) som fångar huvudämnena i podcasten
+                    2. Identifiera alla omnämnanden av:
+                    - Svenska börshörnbolag (från Stockholmsbörsen, First North, NGM)
+                    - Nordiska börsnoterade bolag
+                    - Globala aktier som diskuteras i en svensk kontext
+                    - Finansiella instrument och investeringsprodukter (fonder, ETF:er, certifikat, etc.)
+
+                    För varje omnämnande, samla in följande information:
+                    - Företagets/aktiens namn
+                    - Tickersymbol exakt som den nämns (t.ex. ERIC B, SHB A) eller null om den inte nämns
+                    - Ett direkt citat som visar kontexten (högst 150 tecken)
+                    - Sentiment (positive/negative/neutral) baserat på hur aktien diskuteras
+                    - Rekommendation (buy/sell/hold/none) om sådan nämns eller antyds tydligt
+                    - Prisinformation eller prognos om sådan nämns (exakta siffror om möjligt)
+                    - En kort beskrivning av varför aktien nämns (t.ex. "kvartalsrapport", "produktlansering", "populär aktie")
+
+                    Returnera resultatet som JSON med följande struktur:
+                    {{
+                        "summary": "En sammanfattande text på svenska om podcasten",
+                        "mentions": [
+                            {{
+                                "name": "Företagsnamn",
+                                "ticker": "Tickersymbol eller null",
+                                "context": "Citat från texten",
+                                "sentiment": "positive/negative/neutral",
+                                "recommendation": "buy/sell/hold/none",
+                                "price_info": "Prisinformation eller null",
+                                "mention_reason": "Orsak till omnämnande"
+                            }}
+                        ]
+                    }}
+
+                    VIKTIGT: 
+                    - Inkludera INTE några kommentarer, förklaringar eller anteckningar i JSON-svaret
+                    - JSON måste vara helt giltig utan några kommentarer eller förklaringar
+                    - Använd "null" för värden som saknas, inte tomma strängar
+                    - Var så exakt och specifik som möjligt med tickersymboler (inkludera A/B/C-suffixet för svenska aktier)
+                    - För sentiment, använd endast värdena "positive", "negative" eller "neutral"
+                    - För recommendation, använd endast värdena "buy", "sell", "hold" eller "none"
+
+                    Text att analysera:
+                    {text}
+                    """
+                
+                    # Befintlig modellinstans och innehållsgenerering
+                    model = genai.GenerativeModel("gemini-1.5-pro")
+                    response = model.generate_content(prompt)
+                    
+                    # Befintlig JSON-rensning
+                    response_text = response.text
+                    if response_text.startswith("```json") or response_text.startswith("```"):
+                        response_text = response_text.replace("```json", "").replace("```", "").strip()
+                    
+                    # Modifierad JSON-parsing och kvalitetskontroll
+                    try:
+                        result = json.loads(response_text)
+                        logger.info(f"Gemini analysis completed with API key, found {len(result.get('mentions', []))} mentions")
+                        
+                        mentions = result.get('mentions', [])
+                        summary = result.get('summary', '')
+                        
+                        # Ändrad kvalitetskontroll - mindre strikta krav
+                        if len(mentions) >= 1 and len(summary) > 50:
+                            return result
+                        
+                        logger.warning(f"Analysis quality too low: {len(mentions)} mentions, summary length: {len(summary)}")
+                        
+                        # Vänta innan nästa försök
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponentiell backoff
+                        
+                        continue  # Fortsätt till nästa iteration
+                    
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Could not parse Gemini response as JSON: {e}")
+                        logger.error(f"Response text: {response_text}")
+                        
+                        # Vänta innan nästa försök
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponentiell backoff
+                        
+                        continue  # Fortsätt till nästa iteration
+                    
+                except Exception as e:
+                    logger.error(f"Error using Gemini with API key: {e}")
+                    
+                    # Specifik hantering för 429-fel (kvotfel)
+                    if "429" in str(e):
+                        logger.warning("API-kvotfel. Väntar mellan försök...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponentiell backoff
+                        continue
+                    
+                    # För andra fel, returnera ett standardsvar
+                    return {
+                        "summary": "Error analyzing with Gemini",
+                        "mentions": []
+                    }
+            
             except Exception as e:
-                logger.error(f"Error using Gemini with API key: {e}")
-                return {
-                    "summary": "Error analyzing with Gemini",
-                    "mentions": []
-                }
+                logger.error(f"Generellt fel vid Gemini-analys: {e}")
+                
+                # Vänta innan nästa försök
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponentiell backoff
         
-        except Exception as e:
-            logger.error(f"Gemini analysis error: {e}")
-            return {
-                "summary": "Could not analyze the episode",
-                "mentions": []
-            }
+        # Om alla försök misslyckas
+        logger.error("Kunde inte genomföra Gemini-analys efter flera försök")
+        return {
+            "summary": "Analys kunde inte genomföras efter flera försök",
+            "mentions": []
+        }
     
     def save_analysis(self, podcast_name, items):
         """
         Save analysis results to a JSON file with improved naming convention
+        Each episode is saved in a separate file
         
         :param podcast_name: Podcast name
         :param items: List of analyzed items
-        :return: Path to saved file
+        :return: List of paths to saved files
         """
-        # Använd första elementets information för filnamn om det finns
-        if items and len(items) > 0:
+        saved_files = []
+        
+        # Spara varje episod i en separat fil
+        for item in items:
             # Extrahera avsnittsnummer från titeln om möjligt
-            title = items[0].get('title', '')
+            title = item.get('title', '')
             episode_number = None
             # Mönster för att hitta avsnittsnummer som "Sparpodden 555" eller "Avsnitt 123" eller "#382"
             match = re.search(r'(?:[Ss]parpodden|[Aa]vsnitt|[Ee]pisode|#)\s*#?(\d+)', title)
@@ -614,13 +723,13 @@ class YouTubePodcastAnalyzer:
                 episode_number = match.group(1)
             
             # Extrahera publiceringsdatum
-            pub_date = items[0].get('published_at', '')
+            pub_date = item.get('published_at', '')
             # Konvertera från ISO-format till YYYYMMDD
             if pub_date and pub_date != 'Unknown':
                 try:
                     # Hantera ISO 8601-format "2023-01-15T12:30:45Z"
                     pub_date = pub_date.split('T')[0].replace('-', '')
-                except ValueError:
+                except Exception:
                     pub_date = ''
             
             # Skapa filnamn med avsnittsnummer och publiceringsdatum om tillgängliga
@@ -640,27 +749,23 @@ class YouTubePodcastAnalyzer:
                 self.data_dir, 
                 f"{'_'.join(filename_parts)}.json"
             )
-        else:
-            # Fallback om inga items finns
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(
-                self.data_dir, 
-                f"{podcast_name.replace(' ', '_').lower()}_{timestamp}.json"
-            )
+            
+            # Spara enstaka episod i egen fil
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "podcast_name": podcast_name,
+                    "analysis_date": datetime.now().isoformat(),
+                    "items": [item]  # OBS: Bara en episod i listan nu
+                }, f, ensure_ascii=False, indent=4)
+            
+            logger.info(f"Saved analysis for {podcast_name} - {title} to {filename}")
+            saved_files.append(filename)
         
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump({
-                "podcast_name": podcast_name,
-                "analysis_date": datetime.now().isoformat(),
-                "items": items
-            }, f, ensure_ascii=False, indent=4)
-        
-        logger.info(f"Saved analysis for {podcast_name} to {filename}")
-        return filename
+        return saved_files
     
     def save_to_database(self, podcast_name, items):
         """
-        Save analysis results to the database
+        Save analysis results to the database with improved error handling
         
         :param podcast_name: Podcast name
         :param items: List of analyzed items
@@ -671,71 +776,102 @@ class YouTubePodcastAnalyzer:
             return False
         
         try:
-            from BorsRadar.app.API.podcast.podcast_scraper.models import Podcast, Episode, StockMention
+            from models import Podcast, Episode, StockMention
             from datetime import datetime
             
-            # Get or create podcast
-            podcast = self.db_session.query(Podcast).filter_by(name=podcast_name).first()
-            if not podcast:
-                podcast = Podcast(name=podcast_name)
-                if podcast_name in self.podcasts:
-                    podcast.playlist_id = self.podcasts[podcast_name]
-                self.db_session.add(podcast)
-                self.db_session.commit()
+            # Reducera kravet på antal omnämnanden
+            valid_items = [
+                item for item in items 
+                if len(item.get('mentions', [])) >= 1
+            ]
             
-            # Process each analyzed item
-            for item in items:
-                # Check if episode already exists
-                existing_episode = self.db_session.query(Episode).filter_by(video_id=item['video_id']).first()
-                if existing_episode:
-                    logger.info(f"Episode with video_id {item['video_id']} already exists in database")
-                    continue
-                
-                # Parse published_at date
-                published_at = None
-                if item.get('published_at') and item['published_at'] != 'Unknown':
-                    try:
-                        published_at = datetime.strptime(item['published_at'].split('T')[0], '%Y-%m-%d')
-                    except Exception as e:
-                        logger.warning(f"Error parsing published_at date: {e}")
-                
-                # Create new episode
-                episode = Episode(
-                    video_id=item['video_id'],
-                    title=item.get('title', 'Unknown'),
-                    video_url=item.get('video_url', ''),
-                    published_at=published_at,
-                    description=item.get('description', ''),
-                    summary=item.get('summary', ''),
-                    transcript_length=item.get('transcript_length', 0),
-                    analysis_date=datetime.now(),
-                    podcast=podcast
-                )
-                self.db_session.add(episode)
-                self.db_session.commit()
-                
-                # Add stock mentions
-                for mention in item.get('mentions', []):
-                    stock_mention = StockMention(
-                        name=mention.get('name', 'Unknown'),
-                        ticker=mention.get('ticker'),
-                        context=mention.get('context', ''),
-                        sentiment=mention.get('sentiment', 'neutral'),
-                        recommendation=mention.get('recommendation', 'none'),
-                        price_info=mention.get('price_info', ''),
-                        mention_reason=mention.get('mention_reason', ''),
-                        episode=episode
-                    )
-                    self.db_session.add(stock_mention)
-                
-                self.db_session.commit()
+            if not valid_items:
+                logger.warning("No valid items to save to database")
+                return False
             
-            logger.info(f"Successfully saved {len(items)} episodes to database")
-            return True
+            # Skapa en ny session
+            session = self.db_session()
+            
+            try:
+                # Transaktionshantering
+                with session.begin():
+                    # Hämta eller skapa podcast
+                    podcast = session.query(Podcast).filter_by(name=podcast_name).first()
+                    if not podcast:
+                        podcast = Podcast(
+                            name=podcast_name,
+                            playlist_id=self.podcasts.get(podcast_name)
+                        )
+                        session.add(podcast)
+                    
+                    # Bearbeta varje analyserad artikel
+                    for item in valid_items:
+                        # Undvik dubbletter
+                        existing_episode = (
+                            session.query(Episode)
+                            .filter_by(video_id=item['video_id'])
+                            .first()
+                        )
+                        
+                        if existing_episode:
+                            logger.info(f"Episode {item['video_id']} already exists, skipping")
+                            continue
+                        
+                        # Hantera publiceringsdatum
+                        published_at = None
+                        if item.get('published_at') and item['published_at'] != 'Unknown':
+                            try:
+                                published_at = datetime.strptime(
+                                    item['published_at'].split('T')[0], 
+                                    '%Y-%m-%d'
+                                )
+                            except Exception as e:
+                                logger.warning(f"Kunde inte tolka publiceringsdatum: {e}")
+                        
+                        # Skapa ny episod
+                        episode = Episode(
+                            video_id=item['video_id'],
+                            title=item.get('title', 'Okänd titel')[:255],
+                            video_url=item.get('video_url', '')[:512],
+                            published_at=published_at,
+                            description=item.get('description', '')[:1000],
+                            summary=item.get('summary', '')[:2000],
+                            transcript_length=item.get('transcript_length', 0),
+                            analysis_date=datetime.now(),
+                            podcast=podcast
+                        )
+                        session.add(episode)
+                        
+                        # Lägg till aktieomtal
+                        for mention in item.get('mentions', []):
+                            # Lägg till denna förbättring för alla fält som kan vara None
+                            stock_mention = StockMention(
+                                name=mention.get('name', 'Okänt')[:255],
+                                ticker=(mention.get('ticker') or '')[:50],
+                                context=(mention.get('context', ''))[:500],
+                                sentiment=(mention.get('sentiment', 'neutral'))[:50],
+                                recommendation=(mention.get('recommendation', 'none'))[:50],
+                                price_info=(mention.get('price_info') or '')[:255],
+                                mention_reason=(mention.get('mention_reason') or '')[:255],
+                                episode=episode
+                            )
+                            session.add(stock_mention)
+                
+                # Commit och stäng sessionen
+                session.commit()
+                logger.info(f"Sparade {len(valid_items)} episoder till databasen")
+                return True
+            
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Databaslagringsfel: {e}")
+                return False
+            finally:
+                # Stäng sessionen
+                session.close()
         
         except Exception as e:
-            logger.error(f"Error saving to database: {e}")
-            self.db_session.rollback()
+            logger.error(f"Generellt databasfel: {e}")
             return False
     
     def analyze_youtube_urls(self, urls, podcast_name="YouTube Podcast"):
@@ -827,8 +963,9 @@ class YouTubePodcastAnalyzer:
         
         # Save analysis results if we have any
         if analyzed_items:
-            saved_file = self.save_analysis(podcast_name, analyzed_items)
-            print(f"{Fore.GREEN}Analysis saved to: {saved_file}{Style.RESET_ALL}")
+            saved_files = self.save_analysis(podcast_name, analyzed_items)
+            for file in saved_files:
+                print(f"{Fore.GREEN}Analysis saved to: {file}{Style.RESET_ALL}")
         
             # Also save to database if available
             if self.db_session:
@@ -1077,6 +1214,18 @@ def main():
             db_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
             print(f"{Fore.CYAN}Using database connection from environment variables{Style.RESET_ALL}")
     
+    # Lägg till denna kod precis innan raden med analyzer-initieringen
+    if db_url:
+        try:
+            import sqlalchemy
+            engine = sqlalchemy.create_engine(db_url)
+            with engine.connect() as connection:
+                print(f"{Fore.GREEN}Databasanslutning lyckades!{Style.RESET_ALL}")
+                # Du kan köra en enkel testfråga här om du vill
+                result = connection.execute(sqlalchemy.text("SELECT version()"))
+                print(f"Databasversion: {result.fetchone()[0]}")
+        except Exception as e:
+            print(f"{Fore.RED}Kunde inte ansluta till databasen: {e}{Style.RESET_ALL}")
     # Initialize analyzer with available credentials
     analyzer = YouTubePodcastAnalyzer(youtube_api_key, google_api_key, args.output_dir, db_url)
     

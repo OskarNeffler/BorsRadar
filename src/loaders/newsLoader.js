@@ -12,6 +12,7 @@ export async function newsLoader() {
   const cachedNews = getCachedNews();
   if (cachedNews) {
     console.log("NewsLoader: Using cached news", cachedNews);
+    // Returnar en array direkt
     return { newsData: cachedNews };
   }
 
@@ -19,7 +20,7 @@ export async function newsLoader() {
     console.log("NewsLoader: Attempting to fetch news from API");
 
     // Use absolute URL with full path
-    const apiUrl = "http://51.20.22.69:3000/api/articles";
+    const apiUrl = "http://51.20.22.69:3000/api/bors-nyheter";
 
     // Increased timeout and added more detailed error handling
     const controller = new AbortController();
@@ -48,11 +49,15 @@ export async function newsLoader() {
       throw new Error(`Could not fetch news: ${response.status} ${errorText}`);
     }
 
-    const newsData = await response.json();
+    // Servern returnerar ett objekt: { total, offset, limit, articles: [...] }
+    const serverData = await response.json();
+
+    // Plocka ut en ren array så att front-end kan göra newsData.map()
+    const newsData = serverData.articles || [];
 
     console.log("NewsLoader: Fetched news data", newsData);
 
-    if (!newsData || newsData.length === 0) {
+    if (newsData.length === 0) {
       console.warn("NewsLoader: Received empty news data");
       toast.warn("No news found");
     } else {

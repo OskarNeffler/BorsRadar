@@ -8,21 +8,18 @@ const NewsPage = () => {
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated] = useState(new Date());
-  // I NewsPage.jsx, lägg till detta för att inspektera datan
-  console.log("Nyhetsdatan:", newsData);
-  // Kontrollera specifikt om publishedAt finns
-  console.log("Första artikelns publishedAt:", newsData[0]?.publishedAt);
-  // Kontrollera specifikt om imageUrl finns
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch("http://51.20.22.69:3000/api/articles");
+      const response = await fetch("http://51.20.22.69:3000/api/bors-nyheter");
       if (!response.ok) {
         throw new Error("Kunde inte uppdatera nyheter");
       }
 
       const freshNewsData = await response.json();
-      cacheNewsData(freshNewsData);
+      // freshNewsData = { total, offset, limit, articles: [...] }
+      cacheNewsData(freshNewsData.articles || []);
       window.location.reload();
       toast.success("Nyheterna har uppdaterats");
     } catch (error) {
@@ -69,45 +66,46 @@ const NewsPage = () => {
         </div>
       ) : (
         <div className="news-container">
-          {newsData.map((article, index) => (
-            <div key={index} className="news-item">
-              <a
-                href={article.url}
-                className="news-link"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {article.imageUrl && (
-                  <div
-                    className="news-image"
-                    style={{
-                      backgroundImage: `url('${article.imageUrl.replace(
-                        "&width=90&quality=70",
-                        "&width=400&quality=80"
-                      )}')`,
-                    }}
-                  />
-                )}
-                <div className="news-content">
-                  <h3 className="news-title">{article.title}</h3>
-                  <p className="news-summary">
-                    {truncateText(article.summary, 150)}
-                  </p>
-                  <small className="news-date">
-                    {(() => {
-                      console.log(
-                        `Artikel "${article.title}": publishedAt =`,
-                        article.publishedAt
-                      );
-                      return article.publishedAt
+          {newsData.map((article, index) => {
+            // Byt ut &width=90&quality=70 mot en större variant
+            const biggerImageUrl = article.imageUrl
+              ? article.imageUrl.replace(
+                  "&width=90&quality=70",
+                  "&width=400&quality=80"
+                )
+              : null;
+
+            return (
+              <div key={index} className="news-item">
+                <a
+                  href={article.url}
+                  className="news-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {/* Visa endast <img> om vi har en bild-URL */}
+                  {biggerImageUrl && (
+                    <img
+                      src={biggerImageUrl}
+                      alt={article.title}
+                      className="news-image-tag"
+                    />
+                  )}
+                  <div className="news-content">
+                    <h3 className="news-title">{article.title}</h3>
+                    <p className="news-summary">
+                      {truncateText(article.summary, 150)}
+                    </p>
+                    <small className="news-date">
+                      {article.publishedAt
                         ? formatDate(article.publishedAt)
-                        : "Nyligen publicerad";
-                    })()}
-                  </small>
-                </div>
-              </a>
-            </div>
-          ))}
+                        : "Nyligen publicerad"}
+                    </small>
+                  </div>
+                </a>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

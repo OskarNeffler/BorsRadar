@@ -1,0 +1,65 @@
+# Grundläggande webbramverk och server
+fastapi==0.95.1
+uvicorn==0.22.0
+
+# Databashantering
+sqlalchemy==2.0.12
+psycopg2-binary==2.9.6
+alembic==1.10.3  # För databasmigrationer
+
+# Miljövariabler och konfiguration
+python-dotenv==1.0.0
+python-multipart==0.0.6  # För formulärdata och filuppladdningar
+
+# HTTP-förfrågningar
+requests==2.29.0
+
+# Datavalidering
+pydantic==1.10.7
+
+# Autentisering och säkerhet
+python-jose==3.3.0  # JWT-hantering
+passlib==1.7.4     # Lösenordshashning
+bcrypt==4.0.1      # Ytterligare lösenordskryptering
+
+# AI och NLP
+openai==0.27.8     # OpenAI API
+transformers==4.30.2  # Hugging Face transformers (valfritt)
+
+# Datum och tid
+python-dateutil==2.8.2
+
+# Retry och backoff för externa API:er
+tenacity==8.2.2
+backoff==2.2.1
+
+# Loggning
+structlog==23.1.0
+
+# Extra verktyg
+email-validator==2.0.0  # E-postvalidering
+phonenumbers==8.13.13  # Telefonummervalidering
+
+# JWT-beroenden
+cryptography==41.0.1
+
+# Utveckling och testning
+pytest==7.3.1
+httpx==0.24.1      # För FastAPI-testning
+coverage==7.2.5    # Kodtäckningsrapportering
+
+# Dokumentation
+apispec==6.3.0     # API-dokumentation
+marshmallow==3.19.0  # Serialisering/deserialisering
+
+# Valfria databehandlingsbibliotek
+pandas==2.1.1
+numpy==2.0.0
+
+# Frontend-byggnadsverktyg (om du senare vill integrera)
+# Dessa är inte nödvändiga för backend
+# react==18.2.0
+# next==13.4.1
+
+# Deployment (produktionsberoenden)
+gunicorn==20.1.0   # WSGI HTTP-server
