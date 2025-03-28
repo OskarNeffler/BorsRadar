@@ -1,6 +1,6 @@
-// src/loaders/relatedContentLoader.js
 import { waait } from "../helpers";
 import { toast } from "react-toastify";
+import { API_BASE_URL } from "../config";
 
 export async function relatedContentLoader() {
   console.log("RelatedContentLoader: Starting loader function");
@@ -11,8 +11,8 @@ export async function relatedContentLoader() {
   try {
     console.log("RelatedContentLoader: Attempting to fetch related content");
 
-    // Använd din API-URL (justera efter behov)
-    const apiUrl = "http://localhost:8000/content/topics";
+    // Använd din API-URL med korrekt basadress
+    const apiUrl = `${API_BASE_URL}/content/topics`;
 
     // Hantera timeout och mer detaljerad felhantering
     const controller = new AbortController();

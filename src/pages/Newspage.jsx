@@ -3,6 +3,7 @@ import { useLoaderData, useNavigation } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "react-toastify";
 import { formatDate, truncateText, cacheNewsData } from "../helpers";
+import { FaNewspaper } from "react-icons/fa"; // Import an icon for placeholders
 
 const NewsPage = () => {
   const { newsData } = useLoaderData();
@@ -54,8 +55,8 @@ const NewsPage = () => {
       return `https://images.di.se/api/v1/images/${articleId}?width=400&height=240&fit=crop`;
     }
 
-    // Fallback placeholder
-    return "https://via.placeholder.com/400x200?text=Börsradar";
+    // Returnera null istället för en placeholder för att visa en ikon istället
+    return null;
   };
 
   return (
@@ -99,12 +100,19 @@ const NewsPage = () => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <div
-                  className="news-image"
-                  style={{
-                    backgroundImage: `url(${getImageUrl(article)})`,
-                  }}
-                />
+                {getImageUrl(article) ? (
+                  <div
+                    className="news-image"
+                    style={{
+                      backgroundImage: `url(${getImageUrl(article)})`,
+                    }}
+                  />
+                ) : (
+                  <div className="news-image news-image-placeholder">
+                    <FaNewspaper size={40} />
+                    <span>{article.title.substring(0, 20)}...</span>
+                  </div>
+                )}
                 <div className="news-content">
                   <div
                     style={{

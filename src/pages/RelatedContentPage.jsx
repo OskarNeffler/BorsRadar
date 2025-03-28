@@ -3,75 +3,77 @@ import { useState, useEffect } from "react";
 import { useLoaderData, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { formatDate, truncateText } from "../helpers";
+import { API_BASE_URL } from "../config";
 
 const RelatedContentPage = () => {
-  const { contentData, error: loaderError } = useLoaderData();
-  const [activeTopicId, setActiveTopicId] = useState(null);
+  const initialData = useLoaderData();
+  const [contentData, setContentData] = useState(
+    initialData?.contentData || null
+  );
+  const [error, setError] = useState(initialData?.error || null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(loaderError);
+  const [companyGroups, setCompanyGroups] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [expandedItems, setExpandedItems] = useState({});
   const navigate = useNavigate();
 
-  // Strukturera om data för enklare hantering
-  const [formattedTopics, setFormattedTopics] = useState([]);
-
   useEffect(() => {
-    if (contentData?.trending_topics) {
-      const topics = contentData.trending_topics.map((topic) => {
-        // Separera nyheter och podcasts för varje ämne
-        const newsItems = [];
-        const podcastItems = [];
-
-        // Hämta totalt antal av varje typ
-        let newsCount = 0;
-        let podcastCount = 0;
-
-        // Sentiment-analys
-        let totalSentiment = 0;
-        let sentimentCount = 0;
-
-        for (const item of topic.items || []) {
-          if (item.type === "news") {
-            newsItems.push(item);
-            newsCount++;
-
-            // Beräkna sentiment om det finns
-            if (typeof item.sentiment === "number") {
-              totalSentiment += item.sentiment;
-              sentimentCount++;
-            }
-          } else if (item.type === "podcast") {
-            podcastItems.push(item);
-            podcastCount++;
+    const fetchDetailedContent = async (topicId) => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/content/topic/${topicId}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
           }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Kunde inte hämta detaljerat innehåll: ${response.status}`
+          );
         }
 
-        // Beräkna genomsnittligt sentiment
-        const avgSentiment =
-          sentimentCount > 0 ? totalSentiment / sentimentCount : 0;
-
-        return {
-          ...topic,
-          news_items: newsItems,
-          podcast_items: podcastItems,
-          news_count: newsCount,
-          podcast_count: podcastCount,
-          sentiment: avgSentiment,
-        };
-      });
-
-      setFormattedTopics(topics);
-
-      // Sätt första ämnet som aktivt automatiskt
-      if (topics.length > 0 && !activeTopicId) {
-        setActiveTopicId(topics[0].topic_id);
+        const detailedData = await response.json();
+        return detailedData;
+      } catch (error) {
+        console.error("Fel vid hämtning av detaljerat innehåll:", error);
+        return null;
       }
-    }
-  }, [contentData, activeTopicId]);
+    };
 
-  // Sök efter innehåll
+    const processTopics = async () => {
+      if (contentData && contentData.trending_topics) {
+        const processedGroups = await Promise.all(
+          contentData.trending_topics.map(async (topic) => {
+            const detailedContent = await fetchDetailedContent(topic.topic_id);
+
+            return {
+              ...topic,
+              news: detailedContent?.news || [],
+              podcasts: detailedContent?.podcasts || [],
+              detailedContent: detailedContent,
+            };
+          })
+        );
+
+        setCompanyGroups(processedGroups);
+
+        // Välj första ämnet automatiskt om det finns resultat
+        if (processedGroups.length > 0 && !selectedCompany) {
+          setSelectedCompany(processedGroups[0].topic);
+        }
+      }
+    };
+
+    processTopics();
+  }, [contentData, selectedCompany]);
+
   const handleSearch = async (e) => {
     e.preventDefault();
 
@@ -84,7 +86,7 @@ const RelatedContentPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/content/search", {
+      const response = await fetch(`${API_BASE_URL}/content/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -101,8 +103,14 @@ const RelatedContentPage = () => {
       }
 
       const data = await response.json();
-      setSearchResults(data);
-      setActiveTopicId(null);
+
+      setSearchResults({
+        results: data.results || [],
+        query: data.query,
+      });
+
+      setSelectedCompany(null);
+      setError(null);
     } catch (err) {
       console.error("Sökfel:", err);
       toast.error(err.message);
@@ -112,21 +120,23 @@ const RelatedContentPage = () => {
     }
   };
 
-  // Rensa sökning och återgå till ämnen
-  const clearSearch = () => {
-    setSearchQuery("");
-    setSearchResults(null);
-    setIsSearching(false);
-    if (formattedTopics.length > 0) {
-      setActiveTopicId(formattedTopics[0].topic_id);
-    }
-  };
-
-  // Uppdatera innehåll
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      navigate(".", { replace: true });
+      const response = await fetch(`${API_BASE_URL}/content`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Kunde inte uppdatera innehåll: ${response.status}`);
+      }
+
+      const freshData = await response.json();
+      setContentData(freshData);
+      setError(null);
       toast.success("Innehållet har uppdaterats");
     } catch (err) {
       toast.error(err.message);
@@ -136,103 +146,23 @@ const RelatedContentPage = () => {
     }
   };
 
-  // Om inga trender hittas
-  if (!formattedTopics.length && !error) {
-    return (
-      <div className="grid-lg">
-        <div
-          className="flex-lg"
-          style={{ justifyContent: "space-between", alignItems: "center" }}
-        >
-          <h1>Relaterat innehåll</h1>
-          <button
-            onClick={handleRefresh}
-            className="btn btn--dark"
-            disabled={isLoading}
-          >
-            {isLoading ? "Uppdaterar..." : "Uppdatera innehåll"}
-          </button>
-        </div>
-
-        <div className="grid-sm">
-          <p>Inga trender hittades. Försök att uppdatera innehållet.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Om det är ett fel
-  if (error) {
-    return (
-      <div className="grid-lg">
-        <h1>Relaterat innehåll</h1>
-        <div className="grid-sm">
-          <p className="text-warning">{error}</p>
-          <button onClick={handleRefresh} className="btn btn--dark">
-            Försök igen
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Hjälpfunktion för att skapa en bild-URL från ett innehåll
-  const getImageUrl = (item) => {
-    // För nyheter
-    if (item.type === "news" && item.url && item.url.includes("di.se")) {
-      // Extrapolera möjlig bild-URL från DI-artikel
-      const articleId = item.url.split("/").pop().split("?")[0];
-      return `https://images.di.se/api/v1/images/${articleId}?width=400&height=240&fit=crop`;
+  const getActiveCompany = () => {
+    if (selectedCompany && companyGroups.length > 0) {
+      return companyGroups.find((c) => c.topic === selectedCompany);
     }
-
-    // För podcasts med YouTube-URL
-    if (
-      item.type === "podcast" &&
-      item.video_url &&
-      item.video_url.includes("youtube.com")
-    ) {
-      const videoId = item.video_url.split("v=")[1]?.split("&")[0];
-      if (videoId) {
-        return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-      }
-    }
-
-    // Fallback placeholder
-    return "https://via.placeholder.com/400x200?text=Börsradar";
+    return null;
   };
 
-  // Få aktivt ämne
-  const getActiveTopic = () => {
-    if (searchResults) {
-      return null; // Vi är i sökresultatläge
-    }
+  const activeCompany = getActiveCompany();
 
-    if (!formattedTopics.length || !activeTopicId) {
-      return null;
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults(null);
+    setIsSearching(false);
+    if (companyGroups.length > 0) {
+      setSelectedCompany(companyGroups[0].topic);
     }
-
-    return formattedTopics.find((topic) => topic.topic_id === activeTopicId);
   };
-
-  const activeTopic = getActiveTopic();
-
-  // Få alla innehållsobjekt från aktivt ämne eller sökresultat
-  const getContentItems = () => {
-    if (searchResults) {
-      return searchResults.results.map((result) => result.content);
-    }
-
-    if (!activeTopic) {
-      return [];
-    }
-
-    return [
-      ...(activeTopic.news_items || []),
-      ...(activeTopic.podcast_items || []),
-    ];
-  };
-
-  const contentItems = getContentItems();
 
   return (
     <div className="grid-lg">
@@ -254,24 +184,34 @@ const RelatedContentPage = () => {
         <p>
           Se finansnyheter och podcasts om samma ämnen grupperade tillsammans.
           <small style={{ display: "block", marginTop: "5px" }}>
-            Innehållet grupperas automatiskt med hjälp av AI.
+            Innehållet grupperas automatiskt för att visa relaterat innehåll.
           </small>
         </p>
       </div>
 
-      {/* Sökfält */}
       <div
         className="form-wrapper"
         style={{ maxWidth: "none", marginBottom: "2rem" }}
       >
         <form onSubmit={handleSearch} className="flex-md">
-          <div style={{ flex: "1" }}>
+          <div style={{ flex: "1", position: "relative" }}>
+            <span
+              style={{
+                position: "absolute",
+                left: "0.75rem",
+                top: "0.75rem",
+                color: "hsl(var(--muted))",
+              }}
+            >
+              🔍
+            </span>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Sök efter nyheter och podcasts..."
+              placeholder="Sök efter ämnen, nyheter och podcasts..."
               disabled={isLoading}
+              style={{ paddingLeft: "2.5rem" }}
             />
           </div>
           <button
@@ -293,36 +233,74 @@ const RelatedContentPage = () => {
         </form>
       </div>
 
-      <div
-        className="flex-lg"
-        style={{ alignItems: "flex-start", gap: "2rem" }}
-      >
-        {/* Vänster sidofält med ämnen */}
-        {!isSearching && (
+      {isLoading ? (
+        <div className="loading-spinner"></div>
+      ) : error ? (
+        <div className="form-wrapper" style={{ textAlign: "center" }}>
+          <h2 className="h3" style={{ marginBottom: "1rem" }}>
+            Något gick fel
+          </h2>
+          <p>{error}</p>
+          <button
+            className="btn btn--dark"
+            style={{ margin: "1rem auto" }}
+            onClick={handleRefresh}
+          >
+            Försök igen
+          </button>
+        </div>
+      ) : isSearching && searchResults ? (
+        <div className="form-wrapper">
+          <h2>Sökresultat för "{searchQuery}"</h2>
+          <div className="grid-sm">
+            {searchResults.results?.length === 0 ? (
+              <p>Inga resultat hittades för din sökning.</p>
+            ) : (
+              <div>
+                <p>Hittade {searchResults.results?.length || 0} resultat</p>
+                {/* Implementera detaljerad sökresultatvisning här */}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : companyGroups.length === 0 ? (
+        <div className="form-wrapper" style={{ textAlign: "center" }}>
+          <h2 className="h3">Inga ämnesgrupperingar hittades</h2>
+          <p>Det finns för närvarande inga ämnesgrupperingar att visa.</p>
+          <button
+            className="btn btn--dark"
+            style={{ margin: "1rem auto" }}
+            onClick={handleRefresh}
+          >
+            Försök igen
+          </button>
+        </div>
+      ) : (
+        <div
+          className="flex-lg"
+          style={{ alignItems: "flex-start", gap: "2rem" }}
+        >
           <div style={{ width: "250px", flexShrink: 0 }}>
             <div className="form-wrapper" style={{ padding: "1rem" }}>
               <h2 className="h3" style={{ marginBottom: "1rem" }}>
-                Trendande Ämnen
+                Ämnen
               </h2>
               <div className="grid-xs">
-                {formattedTopics.map((topic) => (
+                {companyGroups.map((topic) => (
                   <button
-                    key={topic.topic_id}
+                    key={topic.topic}
                     className={`btn ${
-                      activeTopicId === topic.topic_id
+                      selectedCompany === topic.topic
                         ? "btn--dark"
                         : "btn--outline"
                     }`}
-                    onClick={() => setActiveTopicId(topic.topic_id)}
+                    onClick={() => setSelectedCompany(topic.topic)}
                     style={{ marginBottom: "0.5rem", textAlign: "left" }}
                   >
                     <div>
                       {topic.topic}
                       <small style={{ display: "block", fontSize: "0.8rem" }}>
-                        {topic.news_count + topic.podcast_count ||
-                          topic.item_count ||
-                          0}{" "}
-                        artiklar/podcasts
+                        {topic.item_count} innehåll
                       </small>
                     </div>
                   </button>
@@ -330,306 +308,139 @@ const RelatedContentPage = () => {
               </div>
             </div>
           </div>
-        )}
 
-        {/* Huvudinnehåll */}
-        <div style={{ flex: "1" }}>
-          {isSearching && searchResults ? (
-            <div className="form-wrapper">
-              <h2 className="h2">Sökresultat för "{searchQuery}"</h2>
-              <div style={{ marginBottom: "1rem" }}>
-                <p>Hittade {searchResults.results.length} resultat</p>
-              </div>
+          <div style={{ flex: "1" }}>
+            {activeCompany ? (
+              <div className="form-wrapper">
+                <h2 className="h2">{activeCompany.topic}</h2>
 
-              {searchResults.query_analysis && (
-                <div
-                  style={{
-                    backgroundColor: "hsl(var(--accent) / 0.1)",
-                    padding: "1rem",
-                    borderRadius: "var(--round-md)",
-                    marginBottom: "1.5rem",
-                  }}
-                >
-                  <h3 className="h3">Tolkning av din sökning</h3>
-                  <p>{searchResults.query_analysis.interpreted_as}</p>
-
-                  {searchResults.query_analysis.suggested_topics?.length >
-                    0 && (
-                    <div style={{ marginTop: "0.5rem" }}>
-                      <h4 style={{ fontSize: "1rem", marginBottom: "0.25rem" }}>
-                        Relaterade ämnen:
-                      </h4>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        {searchResults.query_analysis.suggested_topics.map(
-                          (topic, i) => (
-                            <span
-                              key={i}
-                              style={{
-                                background: "hsl(var(--accent) / 0.2)",
-                                color: "hsl(var(--accent))",
-                                padding: "0.25rem 0.5rem",
-                                borderRadius: "var(--round-full)",
-                                fontSize: "0.9rem",
-                              }}
-                            >
-                              {topic}
-                            </span>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="grid-sm">
-                {searchResults.results.length === 0 ? (
-                  <p>Inga resultat hittades för din sökning.</p>
-                ) : (
-                  <div className="news-container" style={{ width: "100%" }}>
-                    {searchResults.results.map((result, index) => (
-                      <div key={index} className="news-item">
-                        <a
-                          href={
-                            result.content.url ||
-                            result.content.video_url ||
-                            "#"
-                          }
-                          className="news-link"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <div
-                            className="news-image"
-                            style={{
-                              backgroundImage: `url(${getImageUrl(
-                                result.content
-                              )})`,
-                            }}
-                          />
-                          <div className="news-content">
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "0.25rem 0.5rem",
-                                fontSize: "0.75rem",
-                                backgroundColor:
-                                  result.content.type === "news"
-                                    ? "hsl(var(--accent) / 0.2)"
-                                    : "hsl(220, 60%, 50%, 0.2)",
-                                color:
-                                  result.content.type === "news"
-                                    ? "hsl(var(--accent))"
-                                    : "hsl(220, 60%, 50%)",
-                                borderRadius: "var(--round-full)",
-                                marginBottom: "0.5rem",
-                              }}
-                            >
-                              {result.content.type === "news"
-                                ? "Nyhet"
-                                : "Podcast"}
-                            </span>
-                            <h3 className="news-title">
-                              {result.content.title}
-                            </h3>
-                            <p className="news-summary">
-                              {truncateText(
-                                result.content.summary ||
-                                  result.content.description ||
-                                  result.match_reason ||
-                                  "Ingen beskrivning tillgänglig",
-                                150
-                              )}
-                            </p>
-                            <small className="news-date">
-                              {result.content.published_at
-                                ? formatDate(result.content.published_at)
-                                : "Nyligen publicerad"}
-                            </small>
-                          </div>
-                        </a>
-                      </div>
-                    ))}
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <p>{activeCompany.summary}</p>
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <strong>Nyckelord:</strong>{" "}
+                    {activeCompany.keywords?.join(", ") || "Inga nyckelord"}
                   </div>
-                )}
-              </div>
-            </div>
-          ) : activeTopic ? (
-            <div className="form-wrapper">
-              <h2 className="h2">{activeTopic.topic}</h2>
-
-              <div style={{ marginBottom: "1.5rem" }}>
-                <p>{activeTopic.summary}</p>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    flexWrap: "wrap",
-                    marginTop: "1rem",
-                  }}
-                >
-                  {activeTopic.keywords.map((keyword, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        background: "hsl(var(--accent) / 0.2)",
-                        color: "hsl(var(--accent))",
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "var(--round-full)",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "1rem",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "hsl(var(--accent) / 0.1)",
-                    color: "hsl(var(--accent))",
-                    borderRadius: "var(--round-md)",
-                    fontSize: "0.9rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                  }}
-                >
-                  <strong style={{ fontSize: "1.25rem" }}>
-                    {activeTopic.news_count || 0}
-                  </strong>
-                  <span>Nyheter</span>
                 </div>
 
                 <div
                   style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "hsl(220, 60%, 50%, 0.1)",
-                    color: "hsl(220, 60%, 50%)",
-                    borderRadius: "var(--round-md)",
-                    fontSize: "0.9rem",
                     display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "1rem",
                   }}
                 >
-                  <strong style={{ fontSize: "1.25rem" }}>
-                    {activeTopic.podcast_count || 0}
-                  </strong>
-                  <span>Podcasts</span>
+                  <div
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "hsl(var(--accent) / 0.1)",
+                      color: "hsl(var(--accent))",
+                      borderRadius: "var(--round-md)",
+                      fontSize: "0.9rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    }}
+                  >
+                    <strong style={{ fontSize: "1.25rem" }}>
+                      {activeCompany.item_count || 0}
+                    </strong>
+                    <span>Totalt innehåll</span>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "hsl(220, 60%, 50%, 0.1)",
+                      color: "hsl(220, 60%, 50%)",
+                      borderRadius: "var(--round-md)",
+                      fontSize: "0.9rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    }}
+                  >
+                    <strong style={{ fontSize: "1.25rem" }}>
+                      {activeCompany.topic_id || "N/A"}
+                    </strong>
+                    <span>Ämnes-ID</span>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "hsl(40, 70%, 50%, 0.1)",
+                      color: "hsl(40, 70%, 40%)",
+                      borderRadius: "var(--round-md)",
+                      fontSize: "0.9rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    }}
+                  >
+                    <strong style={{ fontSize: "1.25rem" }}>
+                      {activeCompany.sentiment !== undefined
+                        ? activeCompany.sentiment
+                        : 0}
+                    </strong>
+                    <span>Sentiment</span>
+                  </div>
                 </div>
 
-                <div
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor:
-                      activeTopic.sentiment > 0.2
-                        ? "hsl(150, 60%, 50%, 0.1)"
-                        : activeTopic.sentiment < -0.2
-                        ? "hsl(0, 60%, 50%, 0.1)"
-                        : "hsl(40, 70%, 50%, 0.1)",
-                    color:
-                      activeTopic.sentiment > 0.2
-                        ? "hsl(150, 60%, 40%)"
-                        : activeTopic.sentiment < -0.2
-                        ? "hsl(0, 60%, 40%)"
-                        : "hsl(40, 70%, 40%)",
-                    borderRadius: "var(--round-md)",
-                    fontSize: "0.9rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                  }}
-                >
-                  <strong style={{ fontSize: "1.25rem" }}>
-                    {activeTopic.sentiment > 0.2
-                      ? "Positiv"
-                      : activeTopic.sentiment < -0.2
-                      ? "Negativ"
-                      : "Neutral"}
-                  </strong>
-                  <span>Sentiment</span>
-                </div>
-              </div>
-
-              <div className="news-container" style={{ width: "100%" }}>
-                {contentItems.map((item, index) => (
-                  <div key={index} className="news-item">
-                    <a
-                      href={item.url || item.video_url || "#"}
-                      className="news-link"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <div
-                        className="news-image"
-                        style={{
-                          backgroundImage: `url(${getImageUrl(item)})`,
-                        }}
-                      />
-                      <div className="news-content">
-                        <span
+                <div>
+                  <h3>Nyheter</h3>
+                  {activeCompany.news && activeCompany.news.length > 0 ? (
+                    <div>
+                      {activeCompany.news.map((newsItem) => (
+                        <div
+                          key={newsItem.id}
                           style={{
-                            display: "inline-block",
-                            padding: "0.25rem 0.5rem",
-                            fontSize: "0.75rem",
-                            backgroundColor:
-                              item.type === "news"
-                                ? "hsl(var(--accent) / 0.2)"
-                                : "hsl(220, 60%, 50%, 0.2)",
-                            color:
-                              item.type === "news"
-                                ? "hsl(var(--accent))"
-                                : "hsl(220, 60%, 50%)",
-                            borderRadius: "var(--round-full)",
-                            marginBottom: "0.5rem",
+                            marginBottom: "1rem",
+                            padding: "1rem",
+                            border: "1px solid #eee",
                           }}
                         >
-                          {item.type === "news" ? "Nyhet" : "Podcast"}
-                        </span>
-                        <h3 className="news-title">{item.title}</h3>
-                        <p className="news-summary">
-                          {truncateText(
-                            item.summary ||
-                              item.description ||
-                              "Ingen beskrivning tillgänglig",
-                            150
-                          )}
-                        </p>
-                        <small className="news-date">
-                          {item.published_at
-                            ? formatDate(item.published_at)
-                            : "Nyligen publicerad"}
-                        </small>
-                      </div>
-                    </a>
-                  </div>
-                ))}
+                          <h4>{newsItem.title}</h4>
+                          <p>{newsItem.summary}</p>
+                          <small>{formatDate(newsItem.published_at)}</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Inga nyheter hittades för detta ämne.</p>
+                  )}
+
+                  <h3>Podcasts</h3>
+                  {activeCompany.podcasts &&
+                  activeCompany.podcasts.length > 0 ? (
+                    <div>
+                      {activeCompany.podcasts.map((podcast) => (
+                        <div
+                          key={podcast.id}
+                          style={{
+                            marginBottom: "1rem",
+                            padding: "1rem",
+                            border: "1px solid #eee",
+                          }}
+                        >
+                          <h4>{podcast.title}</h4>
+                          <p>{podcast.summary}</p>
+                          <small>{formatDate(podcast.published_at)}</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Inga podcasts hittades för detta ämne.</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="grid-sm">
-              <p>Välj ett ämne från listan för att se relaterat innehåll.</p>
-            </div>
-          )}
+            ) : (
+              <div className="grid-sm">
+                <p>Välj ett ämne från listan för att se mer information.</p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

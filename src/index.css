@@ -718,3 +718,397 @@ table a {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
 }
+
+/* Image placeholder for news */
+.news-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: hsl(var(--light));
+  color: hsl(var(--muted));
+  text-align: center;
+  padding: 1rem;
+}
+
+.news-image-placeholder svg {
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+
+/* Podcast summary styles */
+.podcast-summary {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: hsl(var(--accent) / 0.05);
+  border-radius: var(--round-md);
+  font-size: var(--fs-200);
+}
+
+/* Better table styles with smaller font */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.compact-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-200);
+}
+
+.compact-table th,
+.compact-table td {
+  padding: 0.5rem;
+  white-space: nowrap;
+}
+
+.compact-table td.context-cell {
+  max-width: 200px;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Podcast episode card improvements */
+.podcast-episode-card {
+  padding: 1rem;
+  border-bottom: 1px solid hsl(var(--light));
+  cursor: pointer;
+  background: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.podcast-episode-card:hover {
+  background: hsl(var(--accent) / 0.05);
+  transform: translateX(4px);
+}
+
+.podcast-episode-card.active {
+  background: hsl(var(--accent) / 0.1);
+  border-left: 3px solid hsl(var(--accent));
+}
+
+/* Dashboard layout improvements */
+.dashboard-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: var(--space-md);
+  width: 100%;
+  margin-bottom: var(--space-lg);
+}
+
+.dashboard-card {
+  background: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  padding: 1.25rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.dashboard-card-value {
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: hsl(var(--accent));
+  margin: 0.5rem 0;
+}
+
+/* Tab navigation improvements */
+.tab-navigation {
+  display: flex;
+  border-bottom: 2px solid hsl(var(--light));
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.tab-button {
+  padding: 0.75rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: var(--fs-300);
+  color: hsl(var(--muted));
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tab-button:hover {
+  color: hsl(var(--text));
+}
+
+.tab-button.active {
+  color: hsl(var(--accent));
+  border-bottom: 3px solid hsl(var(--accent));
+}
+
+/* Combined dashboard styles */
+.combined-dashboard {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+}
+
+@media (min-width: 992px) {
+  .combined-dashboard {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.dashboard-section {
+  background: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-section h2 {
+  font-size: var(--fs-400);
+  margin-bottom: 1rem;
+  border-bottom: 2px solid hsl(var(--light));
+  padding-bottom: 0.5rem;
+}
+
+/* Expandable content styles */
+.expandable-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.expandable-content.expanded {
+  max-height: 500px;
+}
+
+.expand-button {
+  background: none;
+  border: none;
+  color: hsl(var(--accent));
+  font-size: var(--fs-200);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+.expand-button svg {
+  margin-left: 0.25rem;
+  transition: transform 0.3s ease;
+}
+
+.expand-button.expanded svg {
+  transform: rotate(180deg);
+}
+
+/* Lägg till dessa stilar i din index.css-fil */
+
+/* Expanderbart innehåll */
+.expandable-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.expandable-content.expanded {
+  max-height: 500px;
+}
+
+.expand-button {
+  background: none;
+  border: none;
+  color: hsl(var(--accent));
+  font-size: var(--fs-200);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+/* Podcast-episodlista */
+.podcast-episode-card {
+  padding: 1rem;
+  border-bottom: 1px solid hsl(var(--light));
+  cursor: pointer;
+  background: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.podcast-episode-card:hover {
+  background: hsl(var(--accent) / 0.05);
+  transform: translateX(4px);
+}
+
+.podcast-episode-card.active {
+  background: hsl(var(--accent) / 0.1);
+  border-left: 3px solid hsl(var(--accent));
+}
+
+/* Podcast-sammanfattning */
+.podcast-summary {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: hsl(var(--accent) / 0.05);
+  border-radius: var(--round-md);
+  font-size: var(--fs-200);
+}
+
+/* Företagsomtal */
+.company-mention {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: hsl(var(--accent) / 0.05);
+  border-radius: var(--round-md);
+  border-left: 3px solid hsl(var(--accent));
+}
+
+.company-mention-context {
+  font-style: italic;
+  color: hsl(var(--text));
+  margin-bottom: 0.5rem;
+}
+
+/* Nyhetsbild-platshållare */
+.news-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: hsl(var(--light));
+  color: hsl(var(--muted));
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Sentimentbadges */
+.sentiment-badge {
+  padding: 0.2rem 0.5rem;
+  font-size: var(--fs-200);
+  border-radius: var(--round-full);
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
+.sentiment-badge.positive {
+  background: hsl(150, 60%, 90%);
+  color: hsl(150, 60%, 30%);
+}
+
+.sentiment-badge.negative {
+  background: hsl(0, 60%, 90%);
+  color: hsl(0, 60%, 35%);
+}
+
+.sentiment-badge.neutral {
+  background: hsl(var(--light));
+  color: hsl(var(--muted));
+}
+
+/* Rekommendationsbadges */
+.recommendation-badge {
+  padding: 0.2rem 0.5rem;
+  font-size: var(--fs-200);
+  border-radius: var(--round-full);
+  display: inline-block;
+}
+
+.recommendation-badge.buy,
+.recommendation-badge.köp {
+  background: hsl(150, 60%, 90%);
+  color: hsl(150, 60%, 30%);
+}
+
+.recommendation-badge.sell,
+.recommendation-badge.sälj {
+  background: hsl(0, 60%, 90%);
+  color: hsl(0, 60%, 35%);
+}
+
+.recommendation-badge.hold,
+.recommendation-badge.håll {
+  background: hsl(40, 70%, 90%);
+  color: hsl(40, 70%, 30%);
+}
+
+/* Företagsgrupperingar */
+.company-groups {
+  display: grid;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.company-content-card {
+  background: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px hsl(var(--muted) / 0.1);
+  margin-bottom: var(--space-md);
+  border-left: 4px solid hsl(var(--accent));
+}
+
+.company-content-card h3 {
+  font-size: var(--fs-400);
+  margin-bottom: 0.5rem;
+  color: hsl(var(--accent));
+}
+
+.content-summary {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--round-full);
+  font-size: var(--fs-200);
+}
+
+.news-badge {
+  background: hsl(var(--accent) / 0.1);
+  color: hsl(var(--accent));
+}
+
+.podcast-badge {
+  background: hsl(220, 60%, 50%, 0.1);
+  color: hsl(220, 60%, 50%);
+}
+
+/* Sektioner */
+.dashboard-section {
+  background: hsl(var(--bkg));
+  border-radius: var(--round-md);
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px hsl(var(--muted) / 0.1);
+  margin-bottom: var(--space-lg);
+}
+
+.dashboard-section h2 {
+  font-size: var(--fs-400);
+  margin-bottom: 1rem;
+  border-bottom: 2px solid hsl(var(--light));
+  padding-bottom: 0.5rem;
+}
+
+/* Responsiv design */
+@media (max-width: 768px) {
+  .company-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .flex-lg > div[style*="width: 250px"] {
+    width: 100% !important;
+    margin-bottom: var(--space-md);
+  }
+
+  .dashboard-section {
+    padding: 1rem;
+  }
+}

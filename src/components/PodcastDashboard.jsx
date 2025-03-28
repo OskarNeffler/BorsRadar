@@ -525,13 +525,17 @@ const PodcastDashboard = ({ initialData }) => {
                         textAnchor="end"
                         interval={0}
                         height={100}
+                        tick={{ fontSize: 12 }} // Ändra 12 till önskad textstorlek
                       />
+
                       <YAxis
                         label={{
                           value: "Antal omnämnanden",
                           angle: -90,
                           position: "insideLeft",
+                          fontSize: 12, // Ändra 12 till önskad textstorlek
                         }}
+                        tick={{ fontSize: 12 }} // Ändra 12 till önskad textstorlek för skalmarkeringar
                       />
                       <Tooltip />
                       <Bar dataKey="mentions" fill="hsl(var(--accent))" />
@@ -562,9 +566,11 @@ const PodcastDashboard = ({ initialData }) => {
                         cy="50%"
                         outerRadius={100}
                         dataKey="value"
+                        // Öka textstorleken här (t.ex. från 12 till 14 eller 16)
                         label={({ name, percent }) =>
-                          `${name} ${percent.toFixed(0)}%`
+                          `${(percent * 100).toFixed(0)}%`
                         }
+                        labelStyle={{ fontSize: 14 }} // Lägg till denna rad eller öka värdet
                       >
                         {recommendationData.map((entry, index) => (
                           <Cell
@@ -576,8 +582,12 @@ const PodcastDashboard = ({ initialData }) => {
                           />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value, name) => [value, name]} />
-                      <Legend />
+                      // För legendförklaringen under diagrammet
+                      <Legend
+                        formatter={(value, entry) => (
+                          <span style={{ fontSize: 14 }}>{value}</span> // Öka värdet från t.ex. 12 till 14
+                        )}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>

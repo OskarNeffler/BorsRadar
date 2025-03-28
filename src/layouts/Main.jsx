@@ -6,6 +6,7 @@ import wave from "../assets/wave.svg";
 
 // components
 import Nav from "../components/Nav";
+import Intro from "../components/Intro";
 
 //  helper functions
 import { fetchData } from "../helpers";
@@ -19,6 +20,11 @@ export function mainLoader() {
 const Main = () => {
   const { userName } = useLoaderData();
 
+  // Om inget användarnamn finns, visa registreringsformuläret
+  if (!userName) {
+    return <Intro />;
+  }
+
   return (
     <div className="layout">
       <Nav userName={userName} />
@@ -29,4 +35,5 @@ const Main = () => {
     </div>
   );
 };
+
 export default Main;

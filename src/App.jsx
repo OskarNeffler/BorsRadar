@@ -20,6 +20,7 @@ import { relatedContentLoader } from "./loaders/relatedContentLoader";
 import PodcastDashboardPage, {
   podcastDashboardLoader,
 } from "./pages/PodcastDashboardPage";
+import CombinedDashboardPage from "./pages/CombinedDashboardPage";
 
 const router = createBrowserRouter([
   {
@@ -52,9 +53,18 @@ const router = createBrowserRouter([
       },
       {
         index: true,
-        element: <Dashboard />,
-        loader: dashboardLoader,
-        action: dashboardAction,
+        element: <CombinedDashboardPage />,
+        loader: async () => {
+          // Load both news and podcast data for the combined dashboard
+          const newsResponse = await newsLoader();
+          const podcastResponse = await podcastDashboardLoader();
+
+          return {
+            newsData: newsResponse.newsData || [],
+            podcastData: podcastResponse.podcastData || {},
+            error: newsResponse.error || podcastResponse.error,
+          };
+        },
         errorElement: <Error />,
       },
     ],
