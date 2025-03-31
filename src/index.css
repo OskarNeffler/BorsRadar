@@ -74,7 +74,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-  background-color: hsl(var(--bkg));
+  background-color: hsl(50, 20%, 95%);
   color: hsl(var(--text));
 }
 

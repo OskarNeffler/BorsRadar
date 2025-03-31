@@ -52,12 +52,7 @@ const Nav = ({ userName }) => {
                 event.preventDefault();
               }
             }}
-          >
-            <button type="submit" className="btn btn--warning">
-              <span>Delete User</span>
-              <TrashIcon width={20} />
-            </button>
-          </Form>
+          ></Form>
         </div>
       )}
     </nav>
